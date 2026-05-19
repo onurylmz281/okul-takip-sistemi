@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 from supabase import create_client, Client
 
 # Sayfa Ayarları
@@ -13,67 +14,127 @@ def init_connection():
 
 supabase: Client = init_connection()
 
-# Yan Menü (Sidebar) Oluşturma
-st.sidebar.title("Menü")
-menu = st.sidebar.radio("Sayfa Seçimi", ["Öğrenci Yönetimi", "LGS Takip"])
+# Yan Menü (Sidebar)
+st.sidebar.title("Sistem Ayarları")
+branslar = ["Matematik", "Türkçe", "Fen Bilimleri", "Sosyal Bilgiler", "İngilizce", "Din Kültürü", "İnkılap Tarihi"]
+secilen_brans = st.sidebar.selectbox("Branş Seçimi", branslar)
+
+st.sidebar.divider()
+menu = st.sidebar.radio("Modüller", ["Öğrenci Yönetimi", "Not Takip", "Ödev Takip", "LGS Takip"])
+
+sinif_listesi = ["5-A", "5-B", "6-A", "6-B", "7-A", "7-B", "8-A", "8-B"]
 
 if menu == "Öğrenci Yönetimi":
-    st.header("Sınıf ve Öğrenci Yönetimi")
+    st.header("Öğrenci Yönetimi")
+    secilen_sinif = st.selectbox("Sınıf Seçin", sinif_listesi)
     
-    # Sınıf Seçimi
-    siniflar = ["5-A", "6-A", "7-A", "8-A"] 
-    secilen_sinif = st.selectbox("Sınıf Seçin", siniflar)
-    
-    st.subheader(f"{secilen_sinif} Sınıfına Öğrenci Ekle")
-    
-    # Öğrenci Ekleme Formu
     with st.form("ogrenci_ekle_form", clear_on_submit=True):
-        yeni_ogrenci_ad = st.text_input("Öğrenci Adı Soyadı")
-        submit = st.form_submit_button("Ekle")
+        yeni_ogrenci = st.text_input("Öğrenci Adı Soyadı")
+        kaydet_btn = st.form_submit_button("Öğrenciyi Sisteme Ekle")
         
-        if submit and yeni_ogrenci_ad:
-            supabase.table("ogrenciler").insert({"ad_soyad": yeni_ogrenci_ad, "sinif": secilen_sinif}).execute()
-            st.success("Öğrenci sisteme kaydedildi.")
+        if kaydet_btn and yeni_ogrenci:
+            supabase.table("ogrenciler").insert({"ad_soyad": yeni_ogrenci, "sinif": secilen_sinif}).execute()
+            st.success("Kayıt başarılı.")
             st.rerun()
             
-    st.divider()
-    
-    # Sınıf Listesi ve Profil Yönlendirmesi
-    st.subheader(f"{secilen_sinif} Sınıfı Öğrenci Listesi")
-    response = supabase.table("ogrenciler").select("*").eq("sinif", secilen_sinif).execute()
-    ogrenciler = response.data
-    
-    if ogrenciler:
-        ogrenci_isimleri = [ogr["ad_soyad"] for ogr in ogrenciler]
-        secilen_ogrenci = st.selectbox("Profiline gitmek için bir öğrenci seçin", ["Seçiniz..."] + ogrenci_isimleri)
-        
-        if secilen_ogrenci != "Seçiniz...":
-            # Seçilen öğrencinin mevcut verilerini çek
-            ogr_data = next(ogr for ogr in ogrenciler if ogr["ad_soyad"] == secilen_ogrenci)
-            
-            st.markdown(f"### 👤 {secilen_ogrenci} - Profil Sayfası")
-            
-            # Veri Tabanından Mevcut Değerleri Al (Yoksa Varsayılan Ata)
-            mevcut_not = float(ogr_data.get("sinav_notu")) if ogr_data.get("sinav_notu") is not None else 0.0
-            mevcut_gorus = ogr_data.get("ogretmen_gorusu") if ogr_data.get("ogretmen_gorusu") is not None else ""
-            
-            # Profil Veri Güncelleme Formu
-            with st.form("profil_guncelle_form"):
-                sinav_notu = st.number_input("Matematik Sınav Notu", min_value=0.0, max_value=100.0, value=mevcut_not, step=1.0)
-                ogretmen_gorusu = st.text_area("Öğretmen Görüşü / Proje ve Kulüp Notları", value=mevcut_gorus)
-                
-                guncelle_submit = st.form_submit_button("Bilgileri Kaydet")
-                
-                if guncelle_submit:
-                    supabase.table("ogrenciler").update({
-                        "sinav_notu": sinav_notu,
-                        "ogretmen_gorusu": ogretmen_gorusu
-                    }).eq("id", ogr_data["id"]).execute()
-                    st.success("Bilgiler veri tabanına kaydedildi.")
-                    st.rerun()
+    st.subheader(f"{secilen_sinif} Sınıf Listesi")
+    ogrenciler_res = supabase.table("ogrenciler").select("*").eq("sinif", secilen_sinif).execute()
+    if ogrenciler_res.data:
+        df_ogrenciler = pd.DataFrame(ogrenciler_res.data)
+        # Sadece isimleri listele
+        st.dataframe(df_ogrenciler[["ad_soyad"]], use_container_width=True, hide_index=True)
     else:
-        st.warning("Bu sınıfta henüz kayıtlı öğrenci bulunmuyor.")
+        st.info("Kayıtlı öğrenci bulunmamaktadır.")
+
+elif menu == "Not Takip":
+    st.header(f"Not Takip Paneli - {secilen_brans}")
+    secilen_sinif = st.selectbox("Sınıf Seçin", sinif_listesi, key="not_sinif")
+    
+    # 1. Öğrencileri Çek
+    ogrenciler_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif).execute()
+    
+    if not ogrenciler_res.data:
+        st.warning("Bu sınıfa ait öğrenci kaydı bulunmuyor. Lütfen 'Öğrenci Yönetimi' sekmesinden kayıt ekleyin.")
+    else:
+        ogrenciler = ogrenciler_res.data
+        ogrenci_idler = [ogr["id"] for ogr in ogrenciler]
+        
+        # 2. Seçilen branşa ait mevcut notları çek
+        notlar_res = supabase.table("notlar").select("*").eq("brans", secilen_brans).in_("ogrenci_id", ogrenci_idler).execute()
+        mevcut_notlar = {not_kaydi["ogrenci_id"]: not_kaydi for not_kaydi in notlar_res.data}
+        
+        # 3. Tablo için veri hazırlama
+        tablo_verisi = []
+        for ogr in ogrenciler:
+            ogr_id = ogr["id"]
+            not_datasi = mevcut_notlar.get(ogr_id, {})
+            
+            tablo_verisi.append({
+                "Kayıt ID": not_datasi.get("id", None), # Veri tabanında kayıtlıysa ID'sini al
+                "Öğrenci ID": ogr_id,
+                "Ad Soyad": ogr["ad_soyad"],
+                "1. Yazılı": not_datasi.get("sinav_1", None),
+                "2. Yazılı": not_datasi.get("sinav_2", None),
+                "1. Performans": not_datasi.get("perf_1", None),
+                "2. Performans": not_datasi.get("perf_2", None),
+                "Proje": not_datasi.get("proje", None)
+            })
+            
+        df = pd.DataFrame(tablo_verisi)
+        
+        # 4. Ortalama Hesaplama Fonksiyonu
+        def ortalama_hesapla(row):
+            notlar = [row["1. Yazılı"], row["2. Yazılı"], row["1. Performans"], row["2. Performans"], row["Proje"]]
+            gecerli_notlar = [float(n) for n in notlar if pd.notnull(n) and n != ""]
+            if gecerli_notlar:
+                return round(sum(gecerli_notlar) / len(gecerli_notlar), 2)
+            return None
+
+        df["Ortalama"] = df.apply(ortalama_hesapla, axis=1)
+        
+        # 5. Düzenlenebilir Veri Tablosu
+        st.write("Aşağıdaki tablo üzerinden not girişlerini yapabilirsiniz. Sayfadan ayrılmadan önce kaydetmeyi unutmayın.")
+        
+        duzenlenmis_df = st.data_editor(
+            df,
+            column_config={
+                "Kayıt ID": None, # Kullanıcıdan gizle
+                "Öğrenci ID": None, # Kullanıcıdan gizle
+                "Ad Soyad": st.column_config.TextColumn(disabled=True),
+                "Ortalama": st.column_config.NumberColumn(disabled=True)
+            },
+            hide_index=True,
+            use_container_width=True
+        )
+        
+        if st.button("Notları Veri Tabanına Kaydet", type="primary"):
+            kayit_listesi = []
+            for index, row in duzenlenmis_df.iterrows():
+                kayit_verisi = {
+                    "ogrenci_id": row["Öğrenci ID"],
+                    "brans": secilen_brans,
+                    "sinav_1": float(row["1. Yazılı"]) if pd.notnull(row["1. Yazılı"]) and row["1. Yazılı"] != "" else None,
+                    "sinav_2": float(row["2. Yazılı"]) if pd.notnull(row["2. Yazılı"]) and row["2. Yazılı"] != "" else None,
+                    "perf_1": float(row["1. Performans"]) if pd.notnull(row["1. Performans"]) and row["1. Performans"] != "" else None,
+                    "perf_2": float(row["2. Performans"]) if pd.notnull(row["2. Performans"]) and row["2. Performans"] != "" else None,
+                    "proje": float(row["Proje"]) if pd.notnull(row["Proje"]) and row["Proje"] != "" else None
+                }
+                
+                # Eğer daha önce not girilmişse (Kayıt ID varsa) güncelleme işlemi için ID'yi ekle
+                if pd.notnull(row["Kayıt ID"]):
+                    kayit_verisi["id"] = int(row["Kayıt ID"])
+                    
+                kayit_listesi.append(kayit_verisi)
+            
+            # Upsert: ID varsa günceller, yoksa yeni kayıt ekler
+            supabase.table("notlar").upsert(kayit_listesi).execute()
+            st.success("Notlar başarıyla kaydedildi.")
+            st.rerun()
+
+elif menu == "Ödev Takip":
+    st.header("Ödev Takip Modülü")
+    st.write("Bu modülün arayüzü 3. adımda entegre edilecektir.")
 
 elif menu == "LGS Takip":
-    st.header("LGS Deneme Takip Sistemi")
-    st.write("Öğrenci profili tamamlandıktan sonra bu ekrana geçilecektir.")
+    st.header("LGS Takip Modülü")
+    st.write("Bu modülün arayüzü 4. adımda entegre edilecektir.")
