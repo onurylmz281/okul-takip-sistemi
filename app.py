@@ -107,10 +107,9 @@ elif menu == "Not Takip":
         )
         
         if st.button("Notları Veri Tabanına Kaydet", type="primary"):
-            kayit_listesi = []
             for index, row in duzenlenmis_df.iterrows():
                 kayit_verisi = {
-                    "ogrenci_id": row["Öğrenci ID"],
+                    "ogrenci_id": int(row["Öğrenci ID"]),
                     "brans": secilen_brans,
                     "sinav_1": float(row["1. Yazılı"]) if pd.notnull(row["1. Yazılı"]) and str(row["1. Yazılı"]).strip() != "" else None,
                     "sinav_2": float(row["2. Yazılı"]) if pd.notnull(row["2. Yazılı"]) and str(row["2. Yazılı"]).strip() != "" else None,
@@ -119,13 +118,16 @@ elif menu == "Not Takip":
                     "proje": float(row["Proje"]) if pd.notnull(row["Proje"]) and str(row["Proje"]).strip() != "" else None
                 }
                 
+                # Sadece eğer bir not girilmişse işlemi yap
+                not_var_mi = any(v is not None for k, v in kayit_verisi.items() if k not in ["ogrenci_id", "brans"])
+                
                 if pd.notnull(row["Kayıt ID"]):
-                    kayit_verisi["id"] = int(row["Kayıt ID"])
-                    
-                kayit_listesi.append(kayit_verisi)
+                    # Mevcut kaydı güncelle
+                    supabase.table("notlar").update(kayit_verisi).eq("id", int(row["Kayıt ID"])).execute()
+                elif not_var_mi:
+                    # Kayıt yoksa ve en az bir not girilmişse yeni kayıt ekle
+                    supabase.table("notlar").insert(kayit_verisi).execute()
             
-            # Upsert işlemi çakışma durumunda (aynı öğrenci ve branş) güncellemeyi zorunlu kılar
-            supabase.table("notlar").upsert(kayit_listesi, on_conflict="ogrenci_id,brans").execute()
             st.success("Notlar başarıyla kaydedildi.")
             st.rerun()
 
