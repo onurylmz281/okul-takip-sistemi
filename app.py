@@ -4,8 +4,8 @@ import pandas as pd
 from datetime import datetime
 
 # SUPABASE BAĞLANTI BİLGİLERİ
-SUPABASE_URL = "https://nntumiomikmxxtpaxkpq.supabase.co"
-SUPABASE_KEY = "sb_secret_8G7bQFhzUkDUnC9pMJP0lg_CPjze_rw"
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
 headers = {
     "apikey": SUPABASE_KEY,
