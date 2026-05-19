@@ -25,25 +25,62 @@ menu = st.sidebar.radio("Modüller", ["Öğrenci Yönetimi", "Not Takip", "Ödev
 sinif_listesi = ["5-A", "5-B", "6-A", "6-B", "7-A", "7-B", "8-A", "8-B"]
 
 if menu == "Öğrenci Yönetimi":
-    st.header("Öğrenci Yönetimi")
+    st.header("Öğrenci Yönetimi ve Profil Paneli")
     secilen_sinif = st.selectbox("Sınıf Seçin", sinif_listesi)
     
-    with st.form("ogrenci_ekle_form", clear_on_submit=True):
-        yeni_ogrenci = st.text_input("Öğrenci Adı Soyadı")
-        kaydet_btn = st.form_submit_button("Öğrenciyi Sisteme Ekle")
-        
-        if kaydet_btn and yeni_ogrenci:
-            supabase.table("ogrenciler").insert({"ad_soyad": yeni_ogrenci, "sinif": secilen_sinif}).execute()
-            st.success("Kayıt başarılı.")
-            st.rerun()
+    # Sayfayı iki sekmeye bölüyoruz
+    tab1, tab2 = st.tabs(["📋 Sınıf Listesi ve Yeni Kayıt", "👤 Öğrenci Profili"])
+    
+    with tab1:
+        with st.form("ogrenci_ekle_form", clear_on_submit=True):
+            yeni_ogrenci = st.text_input("Öğrenci Adı Soyadı")
+            kaydet_btn = st.form_submit_button("Öğrenciyi Sisteme Ekle")
             
-    st.subheader(f"{secilen_sinif} Sınıf Listesi")
-    ogrenciler_res = supabase.table("ogrenciler").select("*").eq("sinif", secilen_sinif).execute()
-    if ogrenciler_res.data:
-        df_ogrenciler = pd.DataFrame(ogrenciler_res.data)
-        st.dataframe(df_ogrenciler[["ad_soyad"]], use_container_width=True, hide_index=True)
-    else:
-        st.info("Kayıtlı öğrenci bulunmamaktadır.")
+            if kaydet_btn and yeni_ogrenci:
+                supabase.table("ogrenciler").insert({"ad_soyad": yeni_ogrenci, "sinif": secilen_sinif}).execute()
+                st.success("Kayıt başarılı.")
+                st.rerun()
+                
+        st.subheader(f"{secilen_sinif} Sınıf Listesi")
+        ogrenciler_res = supabase.table("ogrenciler").select("*").eq("sinif", secilen_sinif).execute()
+        if ogrenciler_res.data:
+            df_ogrenciler = pd.DataFrame(ogrenciler_res.data)
+            st.dataframe(df_ogrenciler[["ad_soyad"]], use_container_width=True, hide_index=True)
+        else:
+            st.info("Kayıtlı öğrenci bulunmamaktadır.")
+
+    with tab2:
+        ogrenciler_res = supabase.table("ogrenciler").select("*").eq("sinif", secilen_sinif).execute()
+        if ogrenciler_res.data:
+            ogrenci_isimleri = [ogr["ad_soyad"] for ogr in ogrenciler_res.data]
+            secilen_ogrenci = st.selectbox("Profilini Görüntülemek İstediğiniz Öğrenciyi Seçin", ["Seçiniz..."] + ogrenci_isimleri)
+            
+            if secilen_ogrenci != "Seçiniz...":
+                # Seçilen öğrencinin veritabanı ID'sini bul
+                ogr_data = next(ogr for ogr in ogrenciler_res.data if ogr["ad_soyad"] == secilen_ogrenci)
+                ogr_id = ogr_data["id"]
+                
+                st.divider()
+                st.subheader(f"{secilen_ogrenci} - Akademik Profil")
+                
+                # Öğrencinin "notlar" tablosundaki verilerini çek
+                notlar_res = supabase.table("notlar").select("*").eq("ogrenci_id", ogr_id).execute()
+                
+                if notlar_res.data:
+                    df_profil_notlar = pd.DataFrame(notlar_res.data)
+                    # Sütun isimlerini düzenle ve gereksizleri çıkar
+                    df_gosterim = df_profil_notlar.rename(columns={
+                        "brans": "Branş", "sinav_1": "1. Yazılı", "sinav_2": "2. Yazılı", 
+                        "perf_1": "1. Performans", "perf_2": "2. Performans", "proje": "Proje"
+                    })
+                    df_gosterim = df_gosterim[["Branş", "1. Yazılı", "2. Yazılı", "1. Performans", "2. Performans", "Proje"]]
+                    
+                    st.write("**Girilen Sınav Notları**")
+                    st.dataframe(df_gosterim, hide_index=True, use_container_width=True)
+                else:
+                    st.info("Bu öğrenciye ait herhangi bir branşta not verisi bulunmamaktadır.")
+        else:
+            st.warning("Bu sınıfta henüz kayıtlı öğrenci bulunmuyor.")
 
 elif menu == "Not Takip":
     st.header(f"Not Takip Paneli - {secilen_brans}")
@@ -118,14 +155,11 @@ elif menu == "Not Takip":
                     "proje": float(row["Proje"]) if pd.notnull(row["Proje"]) and str(row["Proje"]).strip() != "" else None
                 }
                 
-                # Sadece eğer bir not girilmişse işlemi yap
                 not_var_mi = any(v is not None for k, v in kayit_verisi.items() if k not in ["ogrenci_id", "brans"])
                 
                 if pd.notnull(row["Kayıt ID"]):
-                    # Mevcut kaydı güncelle
                     supabase.table("notlar").update(kayit_verisi).eq("id", int(row["Kayıt ID"])).execute()
                 elif not_var_mi:
-                    # Kayıt yoksa ve en az bir not girilmişse yeni kayıt ekle
                     supabase.table("notlar").insert(kayit_verisi).execute()
             
             st.success("Notlar başarıyla kaydedildi.")
