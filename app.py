@@ -34,6 +34,7 @@ if menu == "Öğrenci Yönetimi":
         if submit and yeni_ogrenci_ad:
             supabase.table("ogrenciler").insert({"ad_soyad": yeni_ogrenci_ad, "sinif": secilen_sinif}).execute()
             st.success("Öğrenci sisteme kaydedildi.")
+            st.rerun()
             
     st.divider()
     
@@ -47,11 +48,32 @@ if menu == "Öğrenci Yönetimi":
         secilen_ogrenci = st.selectbox("Profiline gitmek için bir öğrenci seçin", ["Seçiniz..."] + ogrenci_isimleri)
         
         if secilen_ogrenci != "Seçiniz...":
-            st.info(f"Şu an {secilen_ogrenci} adlı öğrencinin profilindesiniz.")
-            st.write("Bu alana öğrenciye ait kişisel bilgiler, mülakat kayıtları ve gelişim verileri eklenecektir.")
+            # Seçilen öğrencinin mevcut verilerini çek
+            ogr_data = next(ogr for ogr in ogrenciler if ogr["ad_soyad"] == secilen_ogrenci)
+            
+            st.markdown(f"### 👤 {secilen_ogrenci} - Profil Sayfası")
+            
+            # Veri Tabanından Mevcut Değerleri Al (Yoksa Varsayılan Ata)
+            mevcut_not = float(ogr_data.get("sinav_notu")) if ogr_data.get("sinav_notu") is not None else 0.0
+            mevcut_gorus = ogr_data.get("ogretmen_gorusu") if ogr_data.get("ogretmen_gorusu") is not None else ""
+            
+            # Profil Veri Güncelleme Formu
+            with st.form("profil_guncelle_form"):
+                sinav_notu = st.number_input("Matematik Sınav Notu", min_value=0.0, max_value=100.0, value=mevcut_not, step=1.0)
+                ogretmen_gorusu = st.text_area("Öğretmen Görüşü / Proje ve Kulüp Notları", value=mevcut_gorus)
+                
+                guncelle_submit = st.form_submit_button("Bilgileri Kaydet")
+                
+                if guncelle_submit:
+                    supabase.table("ogrenciler").update({
+                        "sinav_notu": sinav_notu,
+                        "ogretmen_gorusu": ogretmen_gorusu
+                    }).eq("id", ogr_data["id"]).execute()
+                    st.success("Bilgiler veri tabanına kaydedildi.")
+                    st.rerun()
     else:
         st.warning("Bu sınıfta henüz kayıtlı öğrenci bulunmuyor.")
 
 elif menu == "LGS Takip":
     st.header("LGS Deneme Takip Sistemi")
-    st.write("Veri tabanı tabloları hazır. Bu ekranın arayüzü ve grafik kodları 3. adımda oluşturulacaktır.")
+    st.write("Öğrenci profili tamamlandıktan sonra bu ekrana geçilecektir.")
