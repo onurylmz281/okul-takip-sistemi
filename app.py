@@ -130,3 +130,9 @@ elif menu == "Not Takip":
             st.rerun()
 
 elif menu == "Ödev Takip":
+    st.header("Ödev Takip Modülü")
+    st.write("Bu modülün arayüzü 3. adımda entegre edilecektir.")
+
+elif menu == "LGS Takip":
+    st.header("LGS Takip Modülü")
+    st.write("Bu modülün arayüzü 4. adımda entegre edilecektir.")
