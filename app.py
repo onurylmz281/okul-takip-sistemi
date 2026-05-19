@@ -60,7 +60,7 @@ elif menu == "Öğrenci Profili":
             ogr_data = next(ogr for ogr in ogrenciler_res.data if ogr["ad_soyad"] == secilen_ogrenci)
             ogr_id = ogr_data["id"]
             
-            st.markdown(f"### 👤 {secilen_ogrenci} - Academic Profil")
+            st.markdown(f"### 👤 {secilen_ogrenci} - Akademik Profil")
             
             # --- 1. METRİK KARTLARI HESAPLAMA ---
             notlar_res = supabase.table("notlar").select("*").eq("ogrenci_id", ogr_id).execute()
@@ -254,7 +254,6 @@ elif menu == "Not Takip":
 
 elif menu == "Ödev Takip":
     st.header(f"Ödev Takip Modülü - {secilen_brans}")
-    # Sekme yapısı 3 sekmeye genişletildi
     tab1, tab2, tab3 = st.tabs(["📝 Yeni Ödev Tanımla", "✅ Ödev Kontrolü", "📊 Ödev Raporları"])
     
     with tab1:
@@ -284,113 +283,4 @@ elif menu == "Ödev Takip":
         if not odevler_res.data:
             st.info("Bu sınıfa ve branşa ait tanımlanmış bir ödev bulunmamaktadır.")
         else:
-            odev_secenekleri = {f"{o['odev_adi']} (Teslim: {o['teslim_tarihi']})": o['id'] for o in odevler_res.data}
-            secilen_odev_etiketi = st.selectbox("Kontrol Edilecek Ödevi Seçin", list(odev_secenekleri.keys()))
-            secilen_odev_id = odev_secenekleri[secilen_odev_etiketi]
-            
-            ogrenciler_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif_kontrol).execute()
-            
-            if not ogrenciler_res.data:
-                st.warning("Sınıfta kayıtlı öğrenci bulunmuyor.")
-            else:
-                ogrenciler = ogrenciler_res.data
-                ogr_idler = [ogr["id"] for ogr in ogrenciler]
-                
-                teslimler_res = supabase.table("odev_teslimleri").select("*").eq("odev_id", secilen_odev_id).in_("ogrenci_id", ogr_idler).execute()
-                mevcut_teslimler = {t["ogrenci_id"]: t for t in teslimler_res.data}
-                
-                tablo_verisi = []
-                for ogr in ogrenciler:
-                    ogr_id = ogr["id"]
-                    teslim_datasi = mevcut_teslimler.get(ogr_id, {})
-                    tablo_verisi.append({
-                        "Kayıt ID": teslim_datasi.get("id", None),
-                        "Öğrenci ID": ogr_id,
-                        "Ad Soyad": ogr["ad_soyad"],
-                        "Durum": teslim_datasi.get("durum", "Değerlendirilmedi"),
-                        "Öğretmen Notu": teslim_datasi.get("ogretmen_notu", "")
-                    })
-                    
-                df_odev = pd.DataFrame(tablo_verisi)
-                
-                duzenlenmis_df = st.data_editor(
-                    df_odev,
-                    column_config={
-                        "Kayıt ID": None,
-                        "Öğrenci ID": None,
-                        "Ad Soyad": st.column_config.TextColumn(disabled=True),
-                        "Durum": st.column_config.SelectboxColumn(
-                            "Ödev Durumu",
-                            options=["Değerlendirilmedi", "Yaptı", "Yarım", "Yapmadı", "Gelmedi"],
-                            required=True
-                        ),
-                        "Öğretmen Notu": st.column_config.TextColumn("Öğretmen Notu (Opsiyonel)")
-                    },
-                    hide_index=True,
-                    use_container_width=True
-                )
-                
-                if st.button("Ödev Durumlarını Kaydet", type="primary"):
-                    for index, row in duzenlenmis_df.iterrows():
-                        durum = row["Durum"]
-                        not_metni = str(row["Öğretmen Notu"]).strip() if pd.notnull(row["Öğretmen Notu"]) else ""
-                        
-                        if durum != "Değerlendirilmedi":
-                            kayit_verisi = {
-                                "odev_id": secilen_odev_id,
-                                "ogrenci_id": int(row["Öğrenci ID"]),
-                                "durum": durum,
-                                "ogretmen_notu": not_metni
-                            }
-                            
-                            if pd.notnull(row["Kayıt ID"]):
-                                supabase.table("odev_teslimleri").update({"durum": durum, "ogretmen_notu": not_metni}).eq("id", int(row["Kayıt ID"])).execute()
-                            else:
-                                supabase.table("odev_teslimleri").insert(kayit_verisi).execute()
-                    
-                    st.success("Ödev kontrolleri başarıyla kaydedildi.")
-                    st.rerun()
-
-    with tab3:
-        # Pivot Çizelge Modülü
-        secilen_sinif_rapor = st.selectbox("Sınıf Seçin", sinif_listesi, key="odev_sinif_rapor")
-        
-        ogr_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif_rapor).execute()
-        odv_res = supabase.table("odevler").select("id, odev_adi").eq("sinif", secilen_sinif_rapor).eq("brans", secilen_brans).execute()
-        
-        if not ogr_res.data:
-            st.warning("Bu sınıfta kayıtlı öğrenci bulunmuyor.")
-        elif not odv_res.data:
-            st.info("Bu sınıfa ve branşa ait tanımlanmış bir ödev bulunmamaktadır.")
-        else:
-            ogrenciler = ogr_res.data
-            odevler = odv_res.data
-            odev_ids = [o["id"] for o in odevler]
-            ogr_ids = [o["id"] for o in ogrenciler]
-            
-            tsl_res = supabase.table("odev_teslimleri").select("ogrenci_id, odev_id, durum").in_("odev_id", odev_ids).in_("ogrenci_id", ogr_ids).execute()
-            
-            odev_map = {o["id"]: o["odev_adi"] for o in odevler}
-            
-            matris_veri = []
-            for ogr in ogrenciler:
-                satir = {"Öğrenci Adı": ogr["ad_soyad"]}
-                for o in odevler:
-                    satir[o["odev_adi"]] = "-"
-                matris_veri.append(satir)
-                
-            df_matris = pd.DataFrame(matris_veri)
-            df_matris.set_index("Öğrenci Adı", inplace=True)
-            
-            for t in tsl_res.data:
-                ogr_ad = next((o["ad_soyad"] for o in ogrenciler if o["id"] == t["ogrenci_id"]), None)
-                odv_ad = odev_map.get(t["odev_id"])
-                if ogr_ad and odv_ad:
-                    df_matris.at[ogr_ad, odv_ad] = t["durum"]
-            
-            st.write(f"**{secilen_brans} Branşı Ödev Takip Matrisi**")
-            st.dataframe(df_matris, use_container_width=True)
-
-elif menu == "LGS Takip":
-    st.header("LGS Takip Modülü")
-    st.write("Bu modülün arayüzü 4. adımda entegre edilecektir.")
+            odev_secenekleri = {f"{o['odev_adi']}
