@@ -3,8 +3,36 @@ import pandas as pd
 from supabase import create_client, Client
 from datetime import date, timedelta
 
-# Sayfa Ayarları
+# Sayfa Ayarları (Streamlit'te her zaman en üstte olmalıdır)
 st.set_page_config(page_title="Okul Takip Sistemi", layout="wide")
+
+# --- OTURUM (LOGIN) YÖNETİMİ ---
+if "giris_yapildi" not in st.session_state:
+    st.session_state.giris_yapildi = False
+
+# Eğer giriş yapılmamışsa sadece giriş ekranını göster
+if not st.session_state.giris_yapildi:
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        st.title("🔐 Sisteme Giriş")
+        st.write("Lütfen yetkili kullanıcı bilgilerinizi girin.")
+        
+        with st.form("giris_formu"):
+            k_adi = st.text_input("Kullanıcı Adı")
+            sifre = st.text_input("Şifre", type="password")
+            giris_butonu = st.form_submit_button("Giriş Yap", use_container_width=True)
+            
+            if giris_butonu:
+                # Geçici sabit şifre kontrolü
+                if k_adi == "admin" and sifre == "123456":
+                    st.session_state.giris_yapildi = True
+                    st.rerun()
+                else:
+                    st.error("Hatalı kullanıcı adı veya şifre.")
+    # Giriş yapılmadıysa kodun aşağısını okumayı burada durdur
+    st.stop() 
+
+# --- GİRİŞ BAŞARILIYSA AŞAĞIDAKİ KODLAR ÇALIŞIR ---
 
 # Supabase Bağlantısı
 @st.cache_resource
@@ -16,6 +44,10 @@ def init_connection():
 supabase: Client = init_connection()
 
 # Yan Menü (Sidebar)
+if st.sidebar.button("🚪 Çıkış Yap", use_container_width=True):
+    st.session_state.giris_yapildi = False
+    st.rerun()
+
 st.sidebar.title("Sistem Ayarları")
 branslar = ["Matematik", "Türkçe", "Fen Bilimleri", "Sosyal Bilgiler", "İngilizce", "Din Kültürü", "İnkılap Tarihi"]
 secilen_brans = st.sidebar.selectbox("Branş Seçimi", branslar)
@@ -375,7 +407,6 @@ elif menu == "Ödev Takip":
             
             ogr_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif_rapor).execute()
             
-            # Filtrelere göre ödevleri çek
             odv_res = supabase.table("odevler").select("id, odev_adi, brans").eq("sinif", secilen_sinif_rapor).in_("brans", secilen_rapor_branslar).gte("teslim_tarihi", str(baslangic_tarihi)).lte("teslim_tarihi", str(bitis_tarihi)).execute()
             
             if not ogr_res.data:
