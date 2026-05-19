@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from supabase import create_client, Client
+from datetime import date, timedelta
 
 # Sayfa Ayarları
 st.set_page_config(page_title="Okul Takip Sistemi", layout="wide")
@@ -351,43 +352,64 @@ elif menu == "Ödev Takip":
                     st.rerun()
 
     with tab3:
-        secilen_sinif_rapor = st.selectbox("Sınıf Seçin", sinif_listesi, key="odev_sinif_rapor")
+        st.write("### Rapor Filtreleme")
+        col1, col2, col3 = st.columns(3)
         
-        ogr_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif_rapor).execute()
-        odv_res = supabase.table("odevler").select("id, odev_adi, brans").eq("sinif", secilen_sinif_rapor).execute()
+        with col1:
+            secilen_sinif_rapor = st.selectbox("Sınıf Seçin", sinif_listesi, key="odev_sinif_rapor")
         
-        if not ogr_res.data:
-            st.warning("Bu sınıfta kayıtlı öğrenci bulunmuyor.")
-        elif not odv_res.data:
-            st.info("Bu sınıfa ait tanımlanmış herhangi bir ödev bulunmamaktadır.")
+        with col2:
+            bugun = date.today()
+            otuz_gun_once = bugun - timedelta(days=30)
+            secilen_tarih = st.date_input("Teslim Tarihi Aralığı", value=(otuz_gun_once, bugun), key="odev_tarih_filtre")
+        
+        with col3:
+            secilen_rapor_branslar = st.multiselect("Görüntülenecek Branşlar", branslar, default=branslar, key="odev_brans_filtre")
+
+        if len(secilen_tarih) != 2:
+            st.warning("Lütfen tabloda verileri görmek için bir başlangıç ve bitiş tarihi aralığı seçin.")
+        elif not secilen_rapor_branslar:
+            st.warning("Lütfen tabloda verileri görmek için en az bir branş seçin.")
         else:
-            ogrenciler = ogr_res.data
-            odevler = odv_res.data
-            odev_ids = [o["id"] for o in odevler]
-            ogr_ids = [o["id"] for o in ogrenciler]
+            baslangic_tarihi, bitis_tarihi = secilen_tarih
             
-            tsl_res = supabase.table("odev_teslimleri").select("ogrenci_id, odev_id, durum").in_("odev_id", odev_ids).in_("ogrenci_id", ogr_ids).execute()
+            ogr_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif_rapor).execute()
             
-            odev_map = {o["id"]: f"{o['odev_adi']} ({o['brans']})" for o in odevler}
+            # Filtrelere göre ödevleri çek
+            odv_res = supabase.table("odevler").select("id, odev_adi, brans").eq("sinif", secilen_sinif_rapor).in_("brans", secilen_rapor_branslar).gte("teslim_tarihi", str(baslangic_tarihi)).lte("teslim_tarihi", str(bitis_tarihi)).execute()
             
-            matris_veri = []
-            for ogr in ogrenciler:
-                satir = {"Öğrenci Adı": ogr["ad_soyad"]}
-                for o in odevler:
-                    satir[f"{o['odev_adi']} ({o['brans']})"] = "-"
-                matris_veri.append(satir)
+            if not ogr_res.data:
+                st.warning("Bu sınıfta kayıtlı öğrenci bulunmuyor.")
+            elif not odv_res.data:
+                st.info("Belirtilen tarih aralığı ve branşlarda bu sınıfa ait ödev verisi bulunmamaktadır.")
+            else:
+                ogrenciler = ogr_res.data
+                odevler = odv_res.data
+                odev_ids = [o["id"] for o in odevler]
+                ogr_ids = [o["id"] for o in ogrenciler]
                 
-            df_matris = pd.DataFrame(matris_veri)
-            df_matris.set_index("Öğrenci Adı", inplace=True)
-            
-            for t in tsl_res.data:
-                ogr_ad = next((o["ad_soyad"] for o in ogrenciler if o["id"] == t["ogrenci_id"]), None)
-                odv_ad = odev_map.get(t["odev_id"])
-                if ogr_ad and odv_ad:
-                    df_matris.at[ogr_ad, odv_ad] = t["durum"]
-            
-            st.write(f"**{secilen_sinif_rapor} Sınıfı Tüm Dersler Genel Ödev Takip Çizelgesi**")
-            st.dataframe(df_matris, use_container_width=True)
+                tsl_res = supabase.table("odev_teslimleri").select("ogrenci_id, odev_id, durum").in_("odev_id", odev_ids).in_("ogrenci_id", ogr_ids).execute()
+                
+                odev_map = {o["id"]: f"{o['odev_adi']} ({o['brans']})" for o in odevler}
+                
+                matris_veri = []
+                for ogr in ogrenciler:
+                    satir = {"Öğrenci Adı": ogr["ad_soyad"]}
+                    for o in odevler:
+                        satir[f"{o['odev_adi']} ({o['brans']})"] = "-"
+                    matris_veri.append(satir)
+                    
+                df_matris = pd.DataFrame(matris_veri)
+                df_matris.set_index("Öğrenci Adı", inplace=True)
+                
+                for t in tsl_res.data:
+                    ogr_ad = next((o["ad_soyad"] for o in ogrenciler if o["id"] == t["ogrenci_id"]), None)
+                    odv_ad = odev_map.get(t["odev_id"])
+                    if ogr_ad and odv_ad:
+                        df_matris.at[ogr_ad, odv_ad] = t["durum"]
+                
+                st.write(f"**{secilen_sinif_rapor} Sınıfı Ödev Takip Çizelgesi**")
+                st.dataframe(df_matris, use_container_width=True)
 
 elif menu == "LGS Takip":
     st.header("LGS Takip Modülü")
