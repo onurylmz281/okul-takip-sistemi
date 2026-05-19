@@ -22,7 +22,6 @@ secilen_brans = st.sidebar.selectbox("Branş Seçimi", branslar)
 st.sidebar.divider()
 menu = st.sidebar.radio("Modüller", ["Öğrenci Yönetimi", "Öğrenci Profili", "Not Takip", "Ödev Takip", "LGS Takip"])
 
-# Sadece A şubeleri olacak şekilde güncellendi
 sinif_listesi = ["5-A", "6-A", "7-A", "8-A"]
 
 if menu == "Öğrenci Yönetimi":
@@ -131,11 +130,30 @@ elif menu == "Öğrenci Profili":
             st.divider()
 
             # --- 3. ÖDEV TAKİP BİLGİLERİ ---
-            st.subheader("📚 Ödev İstatistikleri")
+            st.subheader("📚 Ödev İstatistikleri ve Detayları")
             if odevler_res.data:
                 df_odevler = pd.DataFrame(odevler_res.data)
                 durum_dagilimi = df_odevler["durum"].value_counts()
-                st.bar_chart(durum_dagilimi)
+                
+                col_grafik, col_tablo = st.columns([1, 2])
+                with col_grafik:
+                    st.write("**Genel Dağılım**")
+                    st.bar_chart(durum_dagilimi)
+                
+                with col_tablo:
+                    st.write("**Ödev Geçmişi ve Öğretmen Notları**")
+                    odev_detay_res = supabase.table("odev_teslimleri").select("durum, ogretmen_notu, odevler(odev_adi, brans)").eq("ogrenci_id", ogr_id).execute()
+                    if odev_detay_res.data:
+                        detay_liste = []
+                        for d in odev_detay_res.data:
+                            odev_bilgisi = d.get("odevler") or {}
+                            detay_liste.append({
+                                "Branş": odev_bilgisi.get("brans", ""),
+                                "Ödev Adı": odev_bilgisi.get("odev_adi", ""),
+                                "Durum": d.get("durum", ""),
+                                "Açıklama/Not": d.get("ogretmen_notu", "")
+                            })
+                        st.dataframe(pd.DataFrame(detay_liste), hide_index=True, use_container_width=True)
             else:
                 st.info("Bu öğrenciye ait ödev değerlendirmesi bulunmamaktadır.")
 
@@ -235,8 +253,105 @@ elif menu == "Not Takip":
             st.rerun()
 
 elif menu == "Ödev Takip":
-    st.header("Ödev Takip Modülü")
-    st.write("Bu modülün arayüzü 3. adımda entegre edilecektir.")
+    st.header(f"Ödev Takip Modülü - {secilen_brans}")
+    tab1, tab2 = st.tabs(["📝 Yeni Ödev Tanımla", "✅ Ödev Kontrolü"])
+    
+    with tab1:
+        secilen_sinif_odev = st.selectbox("Sınıf Seçin", sinif_listesi, key="odev_sinif_tanimla")
+        with st.form("odev_tanimla_form", clear_on_submit=True):
+            odev_adi = st.text_input("Ödev Adı / Konusu (Örn: Çarpanlar ve Katlar Test 1)")
+            odev_aciklama = st.text_area("Ödev Açıklaması (İsteğe Bağlı)")
+            teslim_tarihi = st.date_input("Teslim Tarihi")
+            
+            submit_odev = st.form_submit_button("Ödevi Sisteme Kaydet")
+            
+            if submit_odev and odev_adi:
+                supabase.table("odevler").insert({
+                    "brans": secilen_brans,
+                    "sinif": secilen_sinif_odev,
+                    "odev_adi": odev_adi,
+                    "aciklama": odev_aciklama,
+                    "teslim_tarihi": str(teslim_tarihi)
+                }).execute()
+                st.success("Ödev başarıyla tanımlandı. 'Ödev Kontrolü' sekmesinden değerlendirme yapabilirsiniz.")
+                st.rerun()
+
+    with tab2:
+        secilen_sinif_kontrol = st.selectbox("Sınıf Seçin", sinif_listesi, key="odev_sinif_kontrol")
+        
+        odevler_res = supabase.table("odevler").select("*").eq("sinif", secilen_sinif_kontrol).eq("brans", secilen_brans).execute()
+        
+        if not odevler_res.data:
+            st.info("Bu sınıfa ve branşa ait tanımlanmış bir ödev bulunmamaktadır.")
+        else:
+            odev_secenekleri = {f"{o['odev_adi']} (Teslim: {o['teslim_tarihi']})": o['id'] for o in odevler_res.data}
+            secilen_odev_etiketi = st.selectbox("Kontrol Edilecek Ödevi Seçin", list(odev_secenekleri.keys()))
+            secilen_odev_id = odev_secenekleri[secilen_odev_etiketi]
+            
+            ogrenciler_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif_kontrol).execute()
+            
+            if not ogrenciler_res.data:
+                st.warning("Sınıfta kayıtlı öğrenci bulunmuyor.")
+            else:
+                ogrenciler = ogrenciler_res.data
+                ogr_idler = [ogr["id"] for ogr in ogrenciler]
+                
+                teslimler_res = supabase.table("odev_teslimleri").select("*").eq("odev_id", secilen_odev_id).in_("ogrenci_id", ogr_idler).execute()
+                mevcut_teslimler = {t["ogrenci_id"]: t for t in teslimler_res.data}
+                
+                tablo_verisi = []
+                for ogr in ogrenciler:
+                    ogr_id = ogr["id"]
+                    teslim_datasi = mevcut_teslimler.get(ogr_id, {})
+                    tablo_verisi.append({
+                        "Kayıt ID": teslim_datasi.get("id", None),
+                        "Öğrenci ID": ogr_id,
+                        "Ad Soyad": ogr["ad_soyad"],
+                        "Durum": teslim_datasi.get("durum", "Değerlendirilmedi"),
+                        "Öğretmen Notu": teslim_datasi.get("ogretmen_notu", "")
+                    })
+                    
+                df_odev = pd.DataFrame(tablo_verisi)
+                
+                st.write("Aşağıdaki tablodan öğrencilerin ödev durumlarını ve (varsa) açıklamanızı girip kaydedin.")
+                
+                duzenlenmis_df = st.data_editor(
+                    df_odev,
+                    column_config={
+                        "Kayıt ID": None,
+                        "Öğrenci ID": None,
+                        "Ad Soyad": st.column_config.TextColumn(disabled=True),
+                        "Durum": st.column_config.SelectboxColumn(
+                            "Ödev Durumu",
+                            options=["Değerlendirilmedi", "Yaptı", "Yarım", "Yapmadı", "Gelmedi"],
+                            required=True
+                        ),
+                        "Öğretmen Notu": st.column_config.TextColumn("Öğretmen Notu (Opsiyonel)")
+                    },
+                    hide_index=True,
+                    use_container_width=True
+                )
+                
+                if st.button("Ödev Durumlarını Kaydet", type="primary"):
+                    for index, row in duzenlenmis_df.iterrows():
+                        durum = row["Durum"]
+                        not_metni = str(row["Öğretmen Notu"]).strip() if pd.notnull(row["Öğretmen Notu"]) else ""
+                        
+                        if durum != "Değerlendirilmedi":
+                            kayit_verisi = {
+                                "odev_id": secilen_odev_id,
+                                "ogrenci_id": int(row["Öğrenci ID"]),
+                                "durum": durum,
+                                "ogretmen_notu": not_metni
+                            }
+                            
+                            if pd.notnull(row["Kayıt ID"]):
+                                supabase.table("odev_teslimleri").update({"durum": durum, "ogretmen_notu": not_metni}).eq("id", int(row["Kayıt ID"])).execute()
+                            else:
+                                supabase.table("odev_teslimleri").insert(kayit_verisi).execute()
+                    
+                    st.success("Ödev kontrolleri ve öğretmen notları başarıyla kaydedildi.")
+                    st.rerun()
 
 elif menu == "LGS Takip":
     st.header("LGS Takip Modülü")
