@@ -41,7 +41,6 @@ if menu == "Öğrenci Yönetimi":
     ogrenciler_res = supabase.table("ogrenciler").select("*").eq("sinif", secilen_sinif).execute()
     if ogrenciler_res.data:
         df_ogrenciler = pd.DataFrame(ogrenciler_res.data)
-        # Sadece isimleri listele
         st.dataframe(df_ogrenciler[["ad_soyad"]], use_container_width=True, hide_index=True)
     else:
         st.info("Kayıtlı öğrenci bulunmamaktadır.")
@@ -70,7 +69,7 @@ elif menu == "Not Takip":
             not_datasi = mevcut_notlar.get(ogr_id, {})
             
             tablo_verisi.append({
-                "Kayıt ID": not_datasi.get("id", None), # Veri tabanında kayıtlıysa ID'sini al
+                "Kayıt ID": not_datasi.get("id", None),
                 "Öğrenci ID": ogr_id,
                 "Ad Soyad": ogr["ad_soyad"],
                 "1. Yazılı": not_datasi.get("sinav_1", None),
@@ -85,7 +84,7 @@ elif menu == "Not Takip":
         # 4. Ortalama Hesaplama Fonksiyonu
         def ortalama_hesapla(row):
             notlar = [row["1. Yazılı"], row["2. Yazılı"], row["1. Performans"], row["2. Performans"], row["Proje"]]
-            gecerli_notlar = [float(n) for n in notlar if pd.notnull(n) and n != ""]
+            gecerli_notlar = [float(n) for n in notlar if pd.notnull(n) and str(n).strip() != ""]
             if gecerli_notlar:
                 return round(sum(gecerli_notlar) / len(gecerli_notlar), 2)
             return None
@@ -98,8 +97,8 @@ elif menu == "Not Takip":
         duzenlenmis_df = st.data_editor(
             df,
             column_config={
-                "Kayıt ID": None, # Kullanıcıdan gizle
-                "Öğrenci ID": None, # Kullanıcıdan gizle
+                "Kayıt ID": None, 
+                "Öğrenci ID": None, 
                 "Ad Soyad": st.column_config.TextColumn(disabled=True),
                 "Ortalama": st.column_config.NumberColumn(disabled=True)
             },
@@ -113,28 +112,21 @@ elif menu == "Not Takip":
                 kayit_verisi = {
                     "ogrenci_id": row["Öğrenci ID"],
                     "brans": secilen_brans,
-                    "sinav_1": float(row["1. Yazılı"]) if pd.notnull(row["1. Yazılı"]) and row["1. Yazılı"] != "" else None,
-                    "sinav_2": float(row["2. Yazılı"]) if pd.notnull(row["2. Yazılı"]) and row["2. Yazılı"] != "" else None,
-                    "perf_1": float(row["1. Performans"]) if pd.notnull(row["1. Performans"]) and row["1. Performans"] != "" else None,
-                    "perf_2": float(row["2. Performans"]) if pd.notnull(row["2. Performans"]) and row["2. Performans"] != "" else None,
-                    "proje": float(row["Proje"]) if pd.notnull(row["Proje"]) and row["Proje"] != "" else None
+                    "sinav_1": float(row["1. Yazılı"]) if pd.notnull(row["1. Yazılı"]) and str(row["1. Yazılı"]).strip() != "" else None,
+                    "sinav_2": float(row["2. Yazılı"]) if pd.notnull(row["2. Yazılı"]) and str(row["2. Yazılı"]).strip() != "" else None,
+                    "perf_1": float(row["1. Performans"]) if pd.notnull(row["1. Performans"]) and str(row["1. Performans"]).strip() != "" else None,
+                    "perf_2": float(row["2. Performans"]) if pd.notnull(row["2. Performans"]) and str(row["2. Performans"]).strip() != "" else None,
+                    "proje": float(row["Proje"]) if pd.notnull(row["Proje"]) and str(row["Proje"]).strip() != "" else None
                 }
                 
-                # Eğer daha önce not girilmişse (Kayıt ID varsa) güncelleme işlemi için ID'yi ekle
                 if pd.notnull(row["Kayıt ID"]):
                     kayit_verisi["id"] = int(row["Kayıt ID"])
                     
                 kayit_listesi.append(kayit_verisi)
             
-            # Upsert: ID varsa günceller, yoksa yeni kayıt ekler
-            supabase.table("notlar").upsert(kayit_listesi).execute()
+            # Upsert işlemi çakışma durumunda (aynı öğrenci ve branş) güncellemeyi zorunlu kılar
+            supabase.table("notlar").upsert(kayit_listesi, on_conflict="ogrenci_id,brans").execute()
             st.success("Notlar başarıyla kaydedildi.")
             st.rerun()
 
 elif menu == "Ödev Takip":
-    st.header("Ödev Takip Modülü")
-    st.write("Bu modülün arayüzü 3. adımda entegre edilecektir.")
-
-elif menu == "LGS Takip":
-    st.header("LGS Takip Modülü")
-    st.write("Bu modülün arayüzü 4. adımda entegre edilecektir.")
