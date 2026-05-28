@@ -665,7 +665,7 @@ elif menu == "🛠️ Test Verisi Üret":
         with st.spinner("Sistem tohumlanıyor (Seeding)... Lütfen bekleyin."):
             # 1. Öğrencileri Ekle
             ogrenciler_data = []
-            for sinif in siniflar:
+            for sinif in sinif_listesi:
                 secilenler = random.sample(isim_havuzu, 10)
                 for isim in secilenler:
                     ogrenciler_data.append({"ad_soyad": f"{isim} (Test)", "sinif": sinif})
@@ -706,7 +706,7 @@ elif menu == "🛠️ Test Verisi Üret":
 
             # 3. Ödevleri Ekle
             odevler_data = []
-            for sinif in siniflar:
+            for sinif in sinif_listesi:
                 for brans in branslar:
                     for i in range(1, 4):
                         odevler_data.append({
@@ -730,7 +730,6 @@ elif menu == "🛠️ Test Verisi Üret":
                         "ogretmen_notu": "Test notu."
                     })
             
-            # API satır limitine takılmamak için teslimleri 500'lük paketler halinde gönder
             chunk_size = 500
             for i in range(0, len(teslimler_data), chunk_size):
                 supabase.table("odev_teslimleri").insert(teslimler_data[i:i+chunk_size]).execute()
