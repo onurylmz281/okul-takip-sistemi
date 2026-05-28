@@ -5,6 +5,7 @@ from datetime import date, timedelta
 import matplotlib.pyplot as plt
 import io
 import base64
+import random
 
 # Sayfa Ayarları (Streamlit'te her zaman en üstte olmalıdır)
 st.set_page_config(page_title="Okul Takip Sistemi", layout="wide")
@@ -51,7 +52,7 @@ branslar = ["Matematik", "Türkçe", "Fen Bilimleri", "Sosyal Bilgiler", "İngil
 secilen_brans = st.sidebar.selectbox("Branş Seçimi", branslar)
 
 st.sidebar.divider()
-menu = st.sidebar.radio("Modüller", ["Öğrenci Yönetimi", "Öğrenci Profil Paneli", "Not Takip", "Ödev Takip", "LGS Takip"])
+menu = st.sidebar.radio("Modüller", ["Öğrenci Yönetimi", "Öğrenci Profil Paneli", "Not Takip", "Ödev Takip", "LGS Takip", "🛠️ Test Verisi Üret"])
 
 sinif_listesi = ["5-A", "6-A", "7-A", "8-A"]
 
@@ -93,7 +94,6 @@ elif menu == "Öğrenci Profil Paneli":
             
             st.markdown(f"### 👤 {secilen_ogrenci} - Akademik Gelişim Özet Raporu")
             
-            # --- NOT VERİLERİ VE TABLOSU ---
             notlar_res = supabase.table("notlar").select("*").eq("ogrenci_id", ogr_id).execute()
             genel_ortalama = 0
             df_html_notlar = ""
@@ -122,7 +122,6 @@ elif menu == "Öğrenci Profil Paneli":
             else:
                 st.info("Bu öğrenciye ait herhangi bir not verisi bulunmamaktadır.")
             
-            # --- ÖDEV VERİLERİ VE DİNAMİK FİLTRELEME ---
             odevler_res = supabase.table("odev_teslimleri").select("*").eq("ogrenci_id", ogr_id).execute()
             odev_orani = 0
             genel_graph_base64 = ""
@@ -168,7 +167,6 @@ elif menu == "Öğrenci Profil Paneli":
                     if not df_filtered_odev.empty:
                         color_map = {"Yaptı": "#4CAF50", "Yarım": "#FFC107", "Yapmadı": "#F44336", "Gelmedi": "#9E9E9E"}
                         
-                        # 1. Genel Dağılım Grafiği Üretimi
                         st.write("**Genel Ödev Dağılımı (Filtrelenmiş Veri)**")
                         status_counts_genel = df_filtered_odev["Durum"].value_counts()
                         current_colors_genel = [color_map.get(idx_name, "#2196F3") for idx_name in status_counts_genel.index]
@@ -194,7 +192,6 @@ elif menu == "Öğrenci Profil Paneli":
                         
                         st.divider()
                         
-                        # 2. Ders Bazlı Dağılım Grafikleri Üretimi
                         st.write("**Ders Bazlı Ödev Dağılımları**")
                         cizilecek_branslar = branslar if filtre_brans == "Tüm Dersler" else [filtre_brans]
                         aktif_branslar = [b for b in cizilecek_branslar if not df_filtered_odev[df_filtered_odev["Branş"] == b].empty]
@@ -245,7 +242,6 @@ elif menu == "Öğrenci Profil Paneli":
             else:
                 st.info("Bu öğrenciye ait ödev değerlendirmesi bulunmamaktadır.")
 
-            # --- LGS VERİLERİ VE GELİŞİM GRAFİĞİ ---
             son_deneme_neti = 0
             lgs_line_base64 = ""
             lgs_res = None
@@ -290,7 +286,6 @@ elif menu == "Öğrenci Profil Paneli":
             if is_8th_grade:
                 st.sidebar.metric("Son Deneme Neti", f"{son_deneme_neti} Net")
 
-            # --- DİNAMİK PDF / HTML RAPORU OLUŞTURMA ---
             st.divider()
             st.write("#### 💾 Bireysel Raporu Dışa Aktar")
             
@@ -658,3 +653,86 @@ elif menu == "Ödev Takip":
 elif menu == "LGS Takip":
     st.header("LGS Takip Modülü")
     st.write("Bu modülün arayüzü 4. adımda entegre edilecektir.")
+
+elif menu == "🛠️ Test Verisi Üret":
+    st.header("Sisteme Rastgele Test Verisi Ekleme")
+    st.warning("Bu işlem veritabanınıza rastgele öğrenciler, notlar ve ödevler ekleyecektir. Gerçek verilerinizle karışmaması için öğrencilerin ismine '(Test)' ibaresi eklenecektir.")
+
+    if st.button("Verileri Üret ve Sisteme Yükle", type="primary"):
+        isim_havuzu = ["Ahmet Yılmaz", "Ayşe Kaya", "Mehmet Demir", "Fatma Çelik", "Ali Can", "Zeynep Şahin", "Mustafa Yıldız", "Elif Özdemir", "Hasan Aydın", "Hatice Arslan", "Burak Polat", "Büşra Çetin", "Emre Erdoğan", "Merve Koç", "Oğuzhan Şen", "Ceren Yavuz", "Yunus Emre", "İrem Kurt", "Okan Aslan", "Selin Kılıç"]
+        durumlar = ["Yaptı", "Yarım", "Yapmadı", "Gelmedi"]
+
+        with st.spinner("Sistem tohumlanıyor (Seeding)... Lütfen bekleyin."):
+            # 1. Öğrencileri Ekle
+            ogrenciler_data = []
+            for sinif in siniflar:
+                secilenler = random.sample(isim_havuzu, 10)
+                for isim in secilenler:
+                    ogrenciler_data.append({"ad_soyad": f"{isim} (Test)", "sinif": sinif})
+            res_ogr = supabase.table("ogrenciler").insert(ogrenciler_data).execute()
+
+            # 2. Notları ve LGS verilerini hazırla
+            notlar_data = []
+            lgs_data = []
+            ogr_sinif_map = {ogr['id']: ogr['sinif'] for ogr in res_ogr.data}
+
+            for ogr_id, sinif in ogr_sinif_map.items():
+                for brans in branslar:
+                    notlar_data.append({
+                        "ogrenci_id": ogr_id,
+                        "brans": brans,
+                        "sinav_1": random.randint(40, 100),
+                        "sinav_2": random.randint(40, 100),
+                        "perf_1": random.randint(50, 100),
+                        "perf_2": random.randint(50, 100),
+                        "proje": random.randint(70, 100)
+                    })
+                if sinif == "8-A":
+                    for i in range(1, 4):
+                        lgs_data.append({
+                            "ogrenci_id": ogr_id,
+                            "deneme_adi": f"Deneme {i}",
+                            "turkce_d": random.randint(10, 20), "turkce_y": random.randint(0, 5),
+                            "mat_d": random.randint(5, 20), "mat_y": random.randint(0, 10),
+                            "fen_d": random.randint(10, 20), "fen_y": random.randint(0, 5),
+                            "ink_d": random.randint(5, 10), "ink_y": random.randint(0, 3),
+                            "din_d": random.randint(5, 10), "din_y": random.randint(0, 3),
+                            "ing_d": random.randint(5, 10), "ing_y": random.randint(0, 3)
+                        })
+
+            supabase.table("notlar").insert(notlar_data).execute()
+            if lgs_data:
+                supabase.table("lgs_denemeleri").insert(lgs_data).execute()
+
+            # 3. Ödevleri Ekle
+            odevler_data = []
+            for sinif in siniflar:
+                for brans in branslar:
+                    for i in range(1, 4):
+                        odevler_data.append({
+                            "brans": brans,
+                            "sinif": sinif,
+                            "odev_adi": f"Test Ödevi {i}",
+                            "aciklama": "Sistem testi için otomatik oluşturuldu.",
+                            "teslim_tarihi": str(date.today() - timedelta(days=random.randint(1, 15)))
+                        })
+            res_odev = supabase.table("odevler").insert(odevler_data).execute()
+
+            # 4. Ödev Teslimleri
+            teslimler_data = []
+            for odev in res_odev.data:
+                ilgili_ogrenciler = [k for k, v in ogr_sinif_map.items() if v == odev['sinif']]
+                for ogr_id in ilgili_ogrenciler:
+                    teslimler_data.append({
+                        "odev_id": odev['id'], 
+                        "ogrenci_id": ogr_id, 
+                        "durum": random.choice(durumlar),
+                        "ogretmen_notu": "Test notu."
+                    })
+            
+            # API satır limitine takılmamak için teslimleri 500'lük paketler halinde gönder
+            chunk_size = 500
+            for i in range(0, len(teslimler_data), chunk_size):
+                supabase.table("odev_teslimleri").insert(teslimler_data[i:i+chunk_size]).execute()
+
+        st.success("Test verileri başarıyla oluşturuldu ve veritabanına eklendi!")
