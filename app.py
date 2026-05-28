@@ -51,7 +51,7 @@ branslar = ["Matematik", "Türkçe", "Fen Bilimleri", "Sosyal Bilgiler", "İngil
 secilen_brans = st.sidebar.selectbox("Branş Seçimi", branslar)
 
 st.sidebar.divider()
-menu = st.sidebar.radio("Modüller", ["Öğrenci Yönetimi", "Öğrenci Profili", "Not Takip", "Ödev Takip", "LGS Takip"])
+menu = st.sidebar.radio("Modüller", ["Öğrenci Yönetimi", "Öğrenci Profil Paneli", "Not Takip", "Ödev Takip", "LGS Takip"])
 
 sinif_listesi = ["5-A", "6-A", "7-A", "8-A"]
 
@@ -76,8 +76,8 @@ if menu == "Öğrenci Yönetimi":
     else:
         st.info("Kayıtlı öğrenci bulunmamaktadır.")
 
-elif menu == "Öğrenci Profili":
-    st.header("Öğrenci Profili")
+elif menu == "Öğrenci Profil Paneli":
+    st.header("Öğrenci Profil Paneli")
     secilen_sinif = st.selectbox("Sınıf Seçin", sinif_listesi, key="profil_sinif")
     is_8th_grade = secilen_sinif.startswith("8")
     
@@ -91,7 +91,7 @@ elif menu == "Öğrenci Profili":
             ogr_data = next(ogr for ogr in ogrenciler_res.data if ogr["ad_soyad"] == secilen_ogrenci)
             ogr_id = ogr_data["id"]
             
-            st.markdown(f"### 👤 {secilen_ogrenci} - Akademik Profil")
+            st.markdown(f"### 👤 {secilen_ogrenci} - Akademik Gelişim Özet Raporu")
             
             # --- NOT VERİLERİ VE TABLOSU ---
             notlar_res = supabase.table("notlar").select("*").eq("ogrenci_id", ogr_id).execute()
@@ -112,7 +112,6 @@ elif menu == "Öğrenci Profili":
                 df_gosterim["Ortalama"] = df_gosterim.apply(satir_ort, axis=1)
                 df_gosterim = df_gosterim[["Branş", "1. Yazılı", "2. Yazılı", "1. Performans", "2. Performans", "Proje", "Ortalama"]]
                 
-                # Genel Ortalama Hesaplama
                 gecerli_ortalamalar = df_gosterim["Ortalama"].dropna().tolist()
                 if gecerli_ortalamalar:
                     genel_ortalama = round(sum(gecerli_ortalamalar) / len(gecerli_ortalamalar), 2)
@@ -123,53 +122,89 @@ elif menu == "Öğrenci Profili":
             else:
                 st.info("Bu öğrenciye ait herhangi bir not verisi bulunmamaktadır.")
             
-            # --- ÖDEV VERİLERİ VE GRAFİĞİ ---
+            # --- ÖDEV VERİLERİ VE DİNAMİK FİLTRELEME ---
             odevler_res = supabase.table("odev_teslimleri").select("*").eq("ogrenci_id", ogr_id).execute()
             odev_orani = 0
-            odev_pie_base64 = ""
+            odev_graph_base64 = ""
             df_html_odevler = ""
             
             if odevler_res.data:
-                df_odevler = pd.DataFrame(odevler_res.data)
-                durum_dagilimi = df_odevler["durum"].value_counts()
-                toplam_odev = len(df_odevler)
+                df_odevler_all = pd.DataFrame(odevler_res.data)
+                toplam_odev = len(df_odevler_all)
                 yapti_sayisi = sum(1 for o in odevler_res.data if o["durum"] == "Yaptı")
                 odev_orani = round((yapti_sayisi / toplam_odev) * 100, 1)
                 
                 st.divider()
-                st.subheader("📚 Ödev İstatistikleri ve Detayları")
-                col_grafik, col_tablo = st.columns([1, 2])
+                st.subheader("📚 Ödev İstatistikleri ve Filtreli Dağılım Paneli")
+                
+                # İnteraktif Filtreler
+                col_f1, col_f2 = st.columns(2)
+                with col_f1:
+                    filtre_brans = st.selectbox("Ders Seçimi", ["Tüm Dersler"] + branslar, key="prof_hw_brans")
+                with col_f2:
+                    filtre_durum = st.selectbox("Ödev Durumu", ["Tüm Durumlar", "Yaptı", "Yarım", "Yapmadı", "Gelmedi"], key="prof_hw_durum")
+                
+                # Tüm derslerin detay verilerini ilişkisel tablodan çekme
+                odev_detay_res = supabase.table("odev_teslimleri").select("durum, ogretmen_notu, odevler(odev_adi, brans)").eq("ogrenci_id", ogr_id).execute()
+                detay_liste = []
+                for d in odev_detay_res.data:
+                    odev_bilgisi = d.get("odevler") or {}
+                    detay_liste.append({
+                        "Branş": odev_bilgisi.get("brans", ""),
+                        "Ödev Adı": odev_bilgisi.get("odev_adi", ""),
+                        "Durum": d.get("durum", ""),
+                        "Açıklama/Not": d.get("ogretmen_notu", "")
+                    })
+                df_full_odev = pd.DataFrame(detay_liste)
+                
+                # Filtreleri Uygulama
+                df_filtered_odev = df_full_odev.copy()
+                if filtre_brans != "Tüm Dersler":
+                    df_filtered_odev = df_filtered_odev[df_filtered_odev["Branş"] == filtre_brans]
+                if filtre_durum != "Tüm Durumlar":
+                    df_filtered_odev = df_filtered_odev[df_filtered_odev["Durum"] == filtre_durum]
+                
+                # Arayüz Dağılımı
+                col_grafik, col_tablo = st.columns([4, 5])
                 
                 with col_grafik:
-                    st.write("**Genel Dağılım**")
-                    st.bar_chart(durum_dagilimi)
-                    
-                    # PDF İçin Arka Planda Pasta Grafik Üretimi
-                    fig, ax = plt.subplots(figsize=(3, 3))
-                    durum_dagilimi.plot(kind='pie', autopct='%1.1f%%', ax=ax, startangle=90, cmap="Pastel1")
-                    ax.set_ylabel('')
-                    buf = io.BytesIO()
-                    plt.savefig(buf, format='png', bbox_inches='tight', dpi=150)
-                    buf.seek(0)
-                    odev_pie_base64 = base64.b64encode(buf.read()).decode('utf-8')
-                    plt.close(fig)
+                    st.write("**Filtreli Analiz Grafiği**")
+                    if not df_filtered_odev.empty:
+                        fig, ax = plt.subplots(figsize=(5, 3.8))
+                        color_map = {"Yaptı": "#4CAF50", "Yarım": "#FFC107", "Yapmadı": "#F44336", "Gelmedi": "#9E9E9E"}
+                        
+                        if filtre_brans == "Tüm Dersler":
+                            # Model B: Branş bazlı durum dağılımı (Yığılmış/Stacked Bar)
+                            df_pivot = df_filtered_odev.groupby(["Branş", "Durum"]).size().unstack(fill_value=0)
+                            current_colors = [color_map.get(col, "#2196F3") for col in df_pivot.columns]
+                            df_pivot.plot(kind='bar', stacked=True, ax=ax, color=current_colors)
+                            ax.set_xticklabels(ax.get_xticklabels(), rotation=35, ha='right', fontsize=9)
+                            ax.set_xlabel("")
+                            ax.set_ylabel("Ödev Adedi")
+                            ax.legend(title="Durum", bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=8)
+                        else:
+                            # Model A: Tekil ders için durum sayım sütunları
+                            status_counts = df_filtered_odev["Durum"].value_counts()
+                            current_colors = [color_map.get(idx, "#2196F3") for idx in status_counts.index]
+                            status_counts.plot(kind='bar', ax=ax, color=current_colors)
+                            ax.set_xticklabels(ax.get_xticklabels(), rotation=0, fontsize=9)
+                            ax.set_ylabel("Adet")
+                        
+                        st.pyplot(fig)
+                        
+                        # Grafiği PDF İçin Base64 Koduna Dönüştürme
+                        buf = io.BytesIO()
+                        plt.savefig(buf, format='png', bbox_inches='tight', dpi=150)
+                        buf.seek(0)
+                        odev_graph_base64 = base64.b64encode(buf.read()).decode('utf-8')
+                        plt.close(fig)
+                    else:
+                        st.warning("Seçilen kriterlere uygun ödev kaydı bulunamadığından grafik oluşturulamadı.")
                 
                 with col_tablo:
-                    st.write("**Ödev Geçmişi ve Öğretmen Notları**")
-                    odev_detay_res = supabase.table("odev_teslimleri").select("durum, ogretmen_notu, odevler(odev_adi, brans)").eq("ogrenci_id", ogr_id).execute()
-                    if odev_detay_res.data:
-                        detay_liste = []
-                        for d in odev_detay_res.data:
-                            odev_bilgisi = d.get("odevler") or {}
-                            detay_liste.append({
-                                "Branş": odev_bilgisi.get("brans", ""),
-                                "Ödev Adı": odev_bilgisi.get("odev_adi", ""),
-                                "Durum": d.get("durum", ""),
-                                "Açıklama/Not": d.get("ogretmen_notu", "")
-                            })
-                        df_detay_odev = pd.DataFrame(detay_liste)
-                        st.dataframe(df_detay_odev, hide_index=True, use_container_width=True)
-                        df_html_odevler = df_detay_odev.to_html(border=1, index=False, justify='center')
+                    st.write("**Filtrelenmiş Ödev Sorumluluk Listesi**")
+                    st.dataframe(df_filtered_odev, hide_index=True, use_container_width=True)
+                    df_html_odevler = df_filtered_odev.to_html(border=1, index=False, justify='center')
             else:
                 st.info("Bu öğrenciye ait ödev değerlendirmesi bulunmamaktadır.")
 
@@ -190,7 +225,7 @@ elif menu == "Öğrenci Profili":
                     son_deneme_neti = round(t_net + m_net + f_net + i_net + d_net + in_net, 2)
                     
                     st.divider()
-                    st.subheader("🎯 LGS Deneme Gelişimi")
+                    st.subheader("🎯 LGS Deneme Sınavları Gelişimi")
                     
                     grafik_verisi = []
                     for d in lgs_res.data:
@@ -201,32 +236,29 @@ elif menu == "Öğrenci Profili":
                     st.line_chart(df_lgs_grafik.set_index("Deneme"))
                     
                     # PDF İçin Çizgi Grafik Üretimi
-                    fig2, ax2 = plt.subplots(figsize=(5, 2.5))
+                    fig2, ax2 = plt.subplots(figsize=(5.5, 2.5))
                     ax2.plot(df_lgs_grafik["Deneme"], df_lgs_grafik["Toplam Net"], marker='o', color='#2196F3', linewidth=2)
                     ax2.set_ylabel('Toplam Net')
                     ax2.grid(True, linestyle='--', alpha=0.5)
-                    plt.xticks(rotation=15)
+                    plt.xticks(rotation=15, fontsize=8)
                     buf2 = io.BytesIO()
                     plt.savefig(buf2, format='png', bbox_inches='tight', dpi=150)
                     buf2.seek(0)
                     lgs_line_base64 = base64.b64encode(buf2.read()).decode('utf-8')
                     plt.close(fig2)
 
-            # --- ÜST METRİK KARTLARINI EKRANDA GÖSTERME ---
-            # Streamlit render akışı gereği kartlar en üstte yer alsın diye container kullanılabilir, 
-            # ancak kod sadeliği için veriler hesaplandıktan sonra ara yüze basılmıştır.
+            # Kenar panel metrik gösterimi
             st.sidebar.markdown("---")
-            st.sidebar.subheader("Öğrenci Özet Verileri")
-            st.sidebar.metric("Genel Not Ortalanması", f"{genel_ortalama} / 100")
+            st.sidebar.subheader("Öğrenci Genel Durumu")
+            st.sidebar.metric("Genel Not Ortalaması", f"{genel_ortalama} / 100")
             st.sidebar.metric("Ödev Tamamlama Oranı", f"% {odev_orani}")
             if is_8th_grade:
                 st.sidebar.metric("Son Deneme Neti", f"{son_deneme_neti} Net")
 
-            # --- PDF / HTML RAPORU OLUŞTURMA VE DIŞA AKTARMA ---
+            # --- DİNAMİK PDF / HTML RAPORU OLUŞTURMA ---
             st.divider()
-            st.write("#### 💾 Raporu İndir")
+            st.write("#### 💾 Bireysel Raporu Dışa Aktar")
             
-            # HTML Rapor Şablonu Tasarımı
             html_icerik = f"""
             <html>
             <head>
@@ -237,14 +269,15 @@ elif menu == "Öğrenci Profili":
                 .header-table {{ width: 100%; border: none; margin-bottom: 20px; }}
                 .card-container {{ display: flex; justify-content: space-between; margin-bottom: 25px; gap: 15px; }}
                 .card {{ flex: 1; border: 1px solid #ddd; border-radius: 6px; padding: 15px; text-align: center; background-color: #fafafa; }}
-                .card h3 {{ margin: 0 0 10px 0; font-size: 14px; color: #666; }}
-                .card p {{ margin: 0; font-size: 20px; font-weight: bold; color: #111; }}
+                .card h3 {{ margin: 0 0 10px 0; font-size: 13px; color: #666; }}
+                .card p {{ margin: 0; font-size: 18px; font-weight: bold; color: #111; }}
                 table {{ width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }}
                 th, td {{ border: 1px solid #ddd; padding: 10px; text-align: center; }}
                 th {{ background-color: #f4f6f8; font-weight: bold; }}
                 .section-title {{ margin-top: 30px; border-bottom: 2px solid #2196F3; padding-bottom: 5px; color: #111; }}
-                .graph-container {{ text-align: center; margin-top: 20px; }}
-                .graph-img {{ max-width: 400px; height: auto; }}
+                .graph-container {{ text-align: center; margin-top: 20px; margin-bottom: 20px; }}
+                .graph-img {{ max-width: 480px; height: auto; }}
+                .filter-info {{ font-size: 12px; color: #555; background: #eef1f6; padding: 8px; border-radius: 4px; display: inline-block; }}
             </style>
             </head>
             <body onload="window.print()">
@@ -261,7 +294,7 @@ elif menu == "Öğrenci Profili":
                         <p>{genel_ortalama} / 100</p>
                     </div>
                     <div class="card">
-                        <h3>Ödev Tamamlama Oranı</h3>
+                        <h3>Ödev Tamamlama Oranı (Genel)</h3>
                         <p>% {odev_orani}</p>
                     </div>
                     {"<div class='card'><h3>Son LGS Deneme Neti</h3><p>" + str(son_deneme_neti) + " Net</p></div>" if is_8th_grade else ""}
@@ -270,10 +303,13 @@ elif menu == "Öğrenci Profili":
                 <h3 class="section-title">📊 Ders Notları Detayları</h3>
                 {df_html_notlar if df_html_notlar else "<p>Kayıtlı not verisi bulunmuyor.</p>"}
 
-                <h3 class="section-title">📚 Ödev Durumu ve Takip Dağılımı</h3>
-                {f'<div class="graph-container"><img class="graph-img" src="data:image/png;base64,{odev_pie_base64}"></div>' if odev_pie_base64 else ""}
+                <h3 class="section-title">📚 Ödev Durumu ve Takip Analizi</h3>
+                <div class="filter-info"><b>Uygulanan Rapor Filtreleri:</b> Ders: {filtre_brans} | Durum: {filtre_durum}</div>
+                
+                {f'<div class="graph-container"><img class="graph-img" src="data:image/png;base64,{odev_graph_base64}"></div>' if odev_graph_base64 else ""}
+                
                 <div style="margin-top: 15px;">
-                    {df_html_odevler if df_html_odevler else "<p>Kayıtlı ödev teslim verisi bulunmuyor.</p>"}
+                    {df_html_odevler if df_html_odevler else "<p>Seçilen kriterlere uygun ödev verisi bulunmuyor.</p>"}
                 </div>
             """
             
@@ -291,11 +327,11 @@ elif menu == "Öğrenci Profili":
             """
             
             st.download_button(
-                label="👤 Öğrenci Raporunu PDF Olarak İndir (Grafikli Form)",
+                label="👤 Seçili Filtrelerle Profil Raporunu PDF İndir",
                 data=html_icerik,
                 file_name=f"{secilen_ogrenci}_Gelişim_Raporu.html",
                 mime="text/html",
-                help="İndirdiğiniz dökümanı açtığınızda grafikler otomatik olarak içeride hazır görünecektir ve doğrudan yazdırma ekranı açılacaktır."
+                help="İndirdiğiniz dökümanı açtığınızda grafikler otomatik olarak filtrelenmiş haliyle içeride hazır görünecektir ve doğrudan yazdırma ekranı açılacaktır."
             )
     else:
         st.warning("Bu sınıfta henüz kayıtlı öğrenci bulunmuyor.")
