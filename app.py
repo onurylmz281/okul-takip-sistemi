@@ -23,13 +23,11 @@ if not st.session_state.giris_yapildi:
             giris_butonu = st.form_submit_button("Giriş Yap", use_container_width=True)
             
             if giris_butonu:
-                # Geçici sabit şifre kontrolü
                 if k_adi == "admin" and sifre == "123456":
                     st.session_state.giris_yapildi = True
                     st.rerun()
                 else:
                     st.error("Hatalı kullanıcı adı veya şifre.")
-    # Giriş yapılmadıysa kodun aşağısını okumayı burada durdur
     st.stop() 
 
 # --- GİRİŞ BAŞARILIYSA AŞAĞIDAKİ KODLAR ÇALIŞIR ---
@@ -95,7 +93,6 @@ elif menu == "Öğrenci Profili":
             
             st.markdown(f"### 👤 {secilen_ogrenci} - Akademik Profil")
             
-            # --- 1. METRİK KARTLARI HESAPLAMA ---
             notlar_res = supabase.table("notlar").select("*").eq("ogrenci_id", ogr_id).execute()
             genel_ortalama = 0
             if notlar_res.data:
@@ -139,7 +136,6 @@ elif menu == "Öğrenci Profili":
             
             st.divider()
 
-            # --- 2. NOT VE BAŞARI DURUMU TABLOSU ---
             st.subheader("📊 Branş Bazlı Not Durumu")
             if notlar_res.data:
                 df_profil_notlar = pd.DataFrame(notlar_res.data)
@@ -162,7 +158,6 @@ elif menu == "Öğrenci Profili":
                 
             st.divider()
 
-            # --- 3. ÖDEV TAKİP BİLGİLERİ ---
             st.subheader("📚 Ödev İstatistikleri ve Detayları")
             if odevler_res.data:
                 df_odevler = pd.DataFrame(odevler_res.data)
@@ -190,7 +185,6 @@ elif menu == "Öğrenci Profili":
             else:
                 st.info("Bu öğrenciye ait ödev değerlendirmesi bulunmamaktadır.")
 
-            # --- 4. LGS TAKİP (SADECE 8. SINIFLAR) ---
             if is_8th_grade:
                 st.divider()
                 st.subheader("🎯 LGS Deneme Gelişimi")
@@ -441,6 +435,15 @@ elif menu == "Ödev Takip":
                 
                 st.write(f"**{secilen_sinif_rapor} Sınıfı Ödev Takip Çizelgesi**")
                 st.dataframe(df_matris, use_container_width=True)
+                
+                # --- CSV İNDİRME BUTONU ---
+                csv = df_matris.to_csv(index=True).encode('utf-8')
+                st.download_button(
+                    label="📥 Çizelgeyi İndir (CSV/Excel)",
+                    data=csv,
+                    file_name=f"{secilen_sinif_rapor}_Odev_Raporu.csv",
+                    mime="text/csv",
+                )
 
 elif menu == "LGS Takip":
     st.header("LGS Takip Modülü")
