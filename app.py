@@ -125,7 +125,7 @@ elif menu == "Öğrenci Profil Paneli":
             # --- ÖDEV VERİLERİ VE DİNAMİK FİLTRELEME ---
             odevler_res = supabase.table("odev_teslimleri").select("*").eq("ogrenci_id", ogr_id).execute()
             odev_orani = 0
-            odev_graph_base64 = ""
+            pdf_grafik_html = ""
             df_html_odevler = ""
             
             if odevler_res.data:
@@ -135,16 +135,14 @@ elif menu == "Öğrenci Profil Paneli":
                 odev_orani = round((yapti_sayisi / toplam_odev) * 100, 1)
                 
                 st.divider()
-                st.subheader("📚 Ödev İstatistikleri ve Filtreli Dağılım Paneli")
+                st.subheader("📚 Ödev İstatistikleri ve Ders Bazlı Dağılım Paneli")
                 
-                # İnteraktif Filtreler
                 col_f1, col_f2 = st.columns(2)
                 with col_f1:
                     filtre_brans = st.selectbox("Ders Seçimi", ["Tüm Dersler"] + branslar, key="prof_hw_brans")
                 with col_f2:
                     filtre_durum = st.selectbox("Ödev Durumu", ["Tüm Durumlar", "Yaptı", "Yarım", "Yapmadı", "Gelmedi"], key="prof_hw_durum")
                 
-                # Tüm derslerin detay verilerini ilişkisel tablodan çekme
                 odev_detay_res = supabase.table("odev_teslimleri").select("durum, ogretmen_notu, odevler(odev_adi, brans)").eq("ogrenci_id", ogr_id).execute()
                 detay_liste = []
                 for d in odev_detay_res.data:
@@ -157,47 +155,63 @@ elif menu == "Öğrenci Profil Paneli":
                     })
                 df_full_odev = pd.DataFrame(detay_liste)
                 
-                # Filtreleri Uygulama
                 df_filtered_odev = df_full_odev.copy()
                 if filtre_brans != "Tüm Dersler":
                     df_filtered_odev = df_filtered_odev[df_filtered_odev["Branş"] == filtre_brans]
                 if filtre_durum != "Tüm Durumlar":
                     df_filtered_odev = df_filtered_odev[df_filtered_odev["Durum"] == filtre_durum]
                 
-                # Arayüz Dağılımı
-                col_grafik, col_tablo = st.columns([4, 5])
+                col_grafik, col_tablo = st.columns([5, 5])
                 
                 with col_grafik:
-                    st.write("**Filtreli Analiz Grafiği**")
+                    st.write("**Ders Bazlı Ödev Teslim Dağılımları**")
                     if not df_filtered_odev.empty:
-                        fig, ax = plt.subplots(figsize=(5, 3.8))
                         color_map = {"Yaptı": "#4CAF50", "Yarım": "#FFC107", "Yapmadı": "#F44336", "Gelmedi": "#9E9E9E"}
                         
-                        if filtre_brans == "Tüm Dersler":
-                            # Model B: Branş bazlı durum dağılımı (Yığılmış/Stacked Bar)
-                            df_pivot = df_filtered_odev.groupby(["Branş", "Durum"]).size().unstack(fill_value=0)
-                            current_colors = [color_map.get(col, "#2196F3") for col in df_pivot.columns]
-                            df_pivot.plot(kind='bar', stacked=True, ax=ax, color=current_colors)
-                            ax.set_xticklabels(ax.get_xticklabels(), rotation=35, ha='right', fontsize=9)
-                            ax.set_xlabel("")
-                            ax.set_ylabel("Ödev Adedi")
-                            ax.legend(title="Durum", bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=8)
+                        # Hangi branşların grafiği çizilecek belirleniyor
+                        cizilecek_branslar = branslar if filtre_brans == "Tüm Dersler" else [filtre_brans]
+                        aktif_branslar = [b for b in cizilecek_branslar if not df_filtered_odev[df_filtered_odev["Branş"] == b].empty]
+                        
+                        if aktif_branslar:
+                            # Streamlit ekranında yan yana ikişerli sütun yapısı
+                            cols_ui = st.columns(2)
+                            idx = 0
+                            
+                            for b in aktif_branslar:
+                                df_b = df_filtered_odev[df_filtered_odev["Branş"] == b]
+                                status_counts = df_b["Durum"].value_counts()
+                                current_colors = [color_map.get(idx_name, "#2196F3") for idx_name in status_counts.index]
+                                
+                                fig, ax = plt.subplots(figsize=(2.8, 2.8))
+                                wedges, texts, autotexts = ax.pie(
+                                    status_counts, 
+                                    labels=status_counts.index, 
+                                    autopct='%1.1f%%', 
+                                    startangle=90, 
+                                    colors=current_colors,
+                                    wedgeprops=dict(width=0.4, edgecolor='w')
+                                )
+                                plt.setp(autotexts, size=7, weight="bold")
+                                plt.setp(texts, size=8)
+                                ax.set_title(f"{b}", fontsize=9, weight="bold", pad=5)
+                                
+                                # Arayüze basma
+                                with cols_ui[idx % 2]:
+                                    st.pyplot(fig)
+                                
+                                # PDF için görsel verisine (Base64) dönüştürme
+                                buf = io.BytesIO()
+                                plt.savefig(buf, format='png', bbox_inches='tight', dpi=130)
+                                buf.seek(0)
+                                img_b64 = base64.b64encode(buf.read()).decode('utf-8')
+                                plt.close(fig)
+                                
+                                # HTML çıktı şablonuna ekleme (Yan yana hizalı div'ler)
+                                pdf_grafik_html += f'<div style="display: inline-block; width: 45%; margin: 2%; text-align: center; vertical-align: top;"><img src="data:image/png;base64,{img_b64}" style="width: 100%; max-width: 240px;"></div>'
+                                
+                                idx += 1
                         else:
-                            # Model A: Tekil ders için durum sayım sütunları
-                            status_counts = df_filtered_odev["Durum"].value_counts()
-                            current_colors = [color_map.get(idx, "#2196F3") for idx in status_counts.index]
-                            status_counts.plot(kind='bar', ax=ax, color=current_colors)
-                            ax.set_xticklabels(ax.get_xticklabels(), rotation=0, fontsize=9)
-                            ax.set_ylabel("Adet")
-                        
-                        st.pyplot(fig)
-                        
-                        # Grafiği PDF İçin Base64 Koduna Dönüştürme
-                        buf = io.BytesIO()
-                        plt.savefig(buf, format='png', bbox_inches='tight', dpi=150)
-                        buf.seek(0)
-                        odev_graph_base64 = base64.b64encode(buf.read()).decode('utf-8')
-                        plt.close(fig)
+                            st.warning("Seçilen kriterlere uygun aktif ödev grafiği üretilemedi.")
                     else:
                         st.warning("Seçilen kriterlere uygun ödev kaydı bulunamadığından grafik oluşturulamadı.")
                 
@@ -235,7 +249,6 @@ elif menu == "Öğrenci Profil Paneli":
                     df_lgs_grafik = pd.DataFrame(grafik_verisi)
                     st.line_chart(df_lgs_grafik.set_index("Deneme"))
                     
-                    # PDF İçin Çizgi Grafik Üretimi
                     fig2, ax2 = plt.subplots(figsize=(5.5, 2.5))
                     ax2.plot(df_lgs_grafik["Deneme"], df_lgs_grafik["Toplam Net"], marker='o', color='#2196F3', linewidth=2)
                     ax2.set_ylabel('Toplam Net')
@@ -247,7 +260,6 @@ elif menu == "Öğrenci Profil Paneli":
                     lgs_line_base64 = base64.b64encode(buf2.read()).decode('utf-8')
                     plt.close(fig2)
 
-            # Kenar panel metrik gösterimi
             st.sidebar.markdown("---")
             st.sidebar.subheader("Öğrenci Genel Durumu")
             st.sidebar.metric("Genel Not Ortalaması", f"{genel_ortalama} / 100")
@@ -275,8 +287,9 @@ elif menu == "Öğrenci Profil Paneli":
                 th, td {{ border: 1px solid #ddd; padding: 10px; text-align: center; }}
                 th {{ background-color: #f4f6f8; font-weight: bold; }}
                 .section-title {{ margin-top: 30px; border-bottom: 2px solid #2196F3; padding-bottom: 5px; color: #111; }}
-                .graph-container {{ text-align: center; margin-top: 20px; margin-bottom: 20px; }}
-                .graph-img {{ max-width: 480px; height: auto; }}
+                .graph-container {{ text-align: center; margin-top: 15px; margin-bottom: 15px; width: 100%; }}
+                .lgs-container {{ text-align: center; margin-top: 20px; }}
+                .graph-img-lgs {{ max-width: 550px; height: auto; }}
                 .filter-info {{ font-size: 12px; color: #555; background: #eef1f6; padding: 8px; border-radius: 4px; display: inline-block; }}
             </style>
             </head>
@@ -306,7 +319,9 @@ elif menu == "Öğrenci Profil Paneli":
                 <h3 class="section-title">📚 Ödev Durumu ve Takip Analizi</h3>
                 <div class="filter-info"><b>Uygulanan Rapor Filtreleri:</b> Ders: {filtre_brans} | Durum: {filtre_durum}</div>
                 
-                {f'<div class="graph-container"><img class="graph-img" src="data:image/png;base64,{odev_graph_base64}"></div>' if odev_graph_base64 else ""}
+                <div class="graph-container">
+                    {pdf_grafik_html if pdf_grafik_html else "<p>Kriterlere uygun ödev grafiği bulunmuyor.</p>"}
+                </div>
                 
                 <div style="margin-top: 15px;">
                     {df_html_odevler if df_html_odevler else "<p>Seçilen kriterlere uygun ödev verisi bulunmuyor.</p>"}
@@ -316,8 +331,8 @@ elif menu == "Öğrenci Profil Paneli":
             if is_8th_grade and lgs_line_base64:
                 html_icerik += f"""
                 <h3 class="section-title">🎯 LGS Akademik Net Gelişim Grafiği</h3>
-                <div class="graph-container">
-                    <img class="graph-img" style="max-width:550px;" src="data:image/png;base64,{lgs_line_base64}">
+                <div class="lgs-container">
+                    <img class="graph-img-lgs" src="data:image/png;base64,{lgs_line_base64}">
                 </div>
                 """
                 
@@ -331,7 +346,7 @@ elif menu == "Öğrenci Profil Paneli":
                 data=html_icerik,
                 file_name=f"{secilen_ogrenci}_Gelişim_Raporu.html",
                 mime="text/html",
-                help="İndirdiğiniz dökümanı açtığınızda grafikler otomatik olarak filtrelenmiş haliyle içeride hazır görünecektir ve doğrudan yazdırma ekranı açılacaktır."
+                help="İndirdiğiniz dökümanı açtığınızda grafikler otomatik olarak filtrelenmiş haliyle içeride hazır görünecektir."
             )
     else:
         st.warning("Bu sınıfta henüz kayıtlı öğrenci bulunmuyor.")
