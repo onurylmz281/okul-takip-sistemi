@@ -94,6 +94,7 @@ elif menu == "Öğrenci Profil Paneli":
             
             st.markdown(f"### 👤 {secilen_ogrenci} - Akademik Gelişim Özet Raporu")
             
+            # --- NOT VERİLERİ VE TABLOSU ---
             notlar_res = supabase.table("notlar").select("*").eq("ogrenci_id", ogr_id).execute()
             genel_ortalama = 0
             df_html_notlar = ""
@@ -122,6 +123,7 @@ elif menu == "Öğrenci Profil Paneli":
             else:
                 st.info("Bu öğrenciye ait herhangi bir not verisi bulunmamaktadır.")
             
+            # --- ÖDEV VERİLERİ VE DİNAMİK FİLTRELEME ---
             odevler_res = supabase.table("odev_teslimleri").select("*").eq("ogrenci_id", ogr_id).execute()
             odev_orani = 0
             genel_graph_base64 = ""
@@ -652,7 +654,111 @@ elif menu == "Ödev Takip":
 
 elif menu == "LGS Takip":
     st.header("LGS Takip Modülü")
-    st.write("Bu modülün arayüzü 4. adımda entegre edilecektir.")
+    
+    # Sadece 8 ile başlayan sınıfları filtrele
+    sinif_8_listesi = [s for s in sinif_listesi if s.startswith("8")]
+    
+    if not sinif_8_listesi:
+        st.info("Sistemde kayıtlı 8. sınıf bulunmamaktadır. Bu modül şu anlık sadece 8. sınıflar için aktiftir.")
+    else:
+        secilen_sinif_lgs = st.selectbox("Sınıf Seçin", sinif_8_listesi, key="lgs_sinif_secim")
+        
+        ogrenciler_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif_lgs).execute()
+        
+        if not ogrenciler_res.data:
+            st.warning("Bu sınıfta henüz kayıtlı öğrenci bulunmuyor. Lütfen Öğrenci Yönetimi modülünden öğrenci ekleyin.")
+        else:
+            ogrenciler = ogrenciler_res.data
+            ogr_secenekleri = {ogr["ad_soyad"]: ogr["id"] for ogr in ogrenciler}
+            
+            tab_lgs1, tab_lgs2 = st.tabs(["📝 Deneme Notu Girişi", "📊 Başarı ve Gelişim Analizi"])
+            
+            with tab_lgs1:
+                secilen_ogr_lgs = st.selectbox("Öğrenci Seçin", list(ogr_secenekleri.keys()), key="lgs_ogr_secim_giris")
+                secilen_ogr_id = ogr_secenekleri[secilen_ogr_lgs]
+                
+                with st.form("lgs_not_giris_formu", clear_on_submit=True):
+                    deneme_adi = st.text_input("Deneme Sınavı Adı (Örn: Deneme 1, Özdebir vb.)")
+                    st.write("---")
+                    st.write("**Doğru ve Yanlış Sayılarını Giriniz** (3 Yanlış 1 Doğruyu Götürür)")
+                    
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        st.markdown("##### 📕 Sözel Dersler")
+                        turkce_d = st.number_input("Türkçe Doğru (Maks 20)", min_value=0, max_value=20, value=0)
+                        turkce_y = st.number_input("Türkçe Yanlış", min_value=0, max_value=20, value=0)
+                        st.divider()
+                        ink_d = st.number_input("İnkılap T. Doğru (Maks 10)", min_value=0, max_value=10, value=0)
+                        ink_y = st.number_input("İnkılap T. Yanlış", min_value=0, max_value=10, value=0)
+                    
+                    with c2:
+                        st.markdown("##### 📘 Sayısal Dersler")
+                        mat_d = st.number_input("Matematik Doğru (Maks 20)", min_value=0, max_value=20, value=0)
+                        mat_y = st.number_input("Matematik Yanlış", min_value=0, max_value=20, value=0)
+                        st.divider()
+                        din_d = st.number_input("Din Kültürü Doğru (Maks 10)", min_value=0, max_value=10, value=0)
+                        din_y = st.number_input("Din Kültürü Yanlış", min_value=0, max_value=10, value=0)
+                        
+                    with c3:
+                        st.markdown("##### 🔬 Fen & Yabancı Dil")
+                        fen_d = st.number_input("Fen Bilimleri Doğru (Maks 20)", min_value=0, max_value=20, value=0)
+                        fen_y = st.number_input("Fen Bilimleri Yanlış", min_value=0, max_value=20, value=0)
+                        st.divider()
+                        ing_d = st.number_input("İngilizce Doğru (Maks 10)", min_value=0, max_value=10, value=0)
+                        ing_y = st.number_input("İngilizce Yanlış", min_value=0, max_value=10, value=0)
+                        
+                    lgs_submit = st.form_submit_button("Deneme Sonucunu Veritabanına Kaydet", type="primary", use_container_width=True)
+                    
+                    if lgs_submit and deneme_adi:
+                        if (turkce_d + turkce_y > 20) or (mat_d + mat_y > 20) or (fen_d + fen_y > 20) or (ink_d + ink_y > 10) or (din_d + din_y > 10) or (ing_d + ing_y > 10):
+                            st.error("Girdiğiniz doğru ve yanlış sayıları toplamı, ilgili dersin toplam soru sayısını aşamaz!")
+                        else:
+                            kayit_verisi = {
+                                "ogrenci_id": secilen_ogr_id,
+                                "deneme_adi": deneme_adi,
+                                "turkce_d": turkce_d, "turkce_y": turkce_y,
+                                "mat_d": mat_d, "mat_y": mat_y,
+                                "fen_d": fen_d, "fen_y": fen_y,
+                                "ink_d": ink_d, "ink_y": ink_y,
+                                "din_d": din_d, "din_y": din_y,
+                                "ing_d": ing_d, "ing_y": ing_y
+                            }
+                            supabase.table("lgs_denemeleri").insert(kayit_verisi).execute()
+                            st.success(f"{secilen_ogr_lgs} için {deneme_adi} verileri başarıyla kaydedildi.")
+                            st.rerun()
+
+            with tab_lgs2:
+                secilen_ogr_analiz = st.selectbox("Öğrenci Seçin", list(ogr_secenekleri.keys()), key="lgs_ogr_secim_analiz")
+                secilen_ogr_id_analiz = ogr_secenekleri[secilen_ogr_analiz]
+                
+                lgs_res = supabase.table("lgs_denemeleri").select("*").eq("ogrenci_id", secilen_ogr_id_analiz).execute()
+                
+                if not lgs_res.data:
+                    st.info("Bu öğrenciye ait henüz LGS deneme sınavı verisi bulunmamaktadır.")
+                else:
+                    df_lgs = pd.DataFrame(lgs_res.data)
+                    
+                    # Net Formülleri (Doğru - Yanlış / 3)
+                    df_lgs["Türkçe Net"] = df_lgs["turkce_d"] - (df_lgs["turkce_y"] / 3)
+                    df_lgs["Matematik Net"] = df_lgs["mat_d"] - (df_lgs["mat_y"] / 3)
+                    df_lgs["Fen Net"] = df_lgs["fen_d"] - (df_lgs["fen_y"] / 3)
+                    df_lgs["İnkılap Net"] = df_lgs["ink_d"] - (df_lgs["ink_y"] / 3)
+                    df_lgs["Din Net"] = df_lgs["din_d"] - (df_lgs["din_y"] / 3)
+                    df_lgs["İngilizce Net"] = df_lgs["ing_d"] - (df_lgs["ing_y"] / 3)
+                    
+                    df_lgs["Toplam Net"] = df_lgs["Türkçe Net"] + df_lgs["Matematik Net"] + df_lgs["Fen Net"] + df_lgs["İnkılap Net"] + df_lgs["Din Net"] + df_lgs["İngilizce Net"]
+                    
+                    st.write("### 📈 Toplam Net Gelişim Grafiği")
+                    df_grafik_tot = df_lgs[["deneme_adi", "Toplam Net"]].set_index("deneme_adi")
+                    st.line_chart(df_grafik_tot, use_container_width=True)
+                    
+                    st.write("### 📊 Ders Bazlı Net Gelişimi")
+                    df_grafik_dersler = df_lgs[["deneme_adi", "Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net"]].set_index("deneme_adi")
+                    st.line_chart(df_grafik_dersler, use_container_width=True)
+                    
+                    st.write("### 📋 Deneme Sonuçları Detay Tablosu")
+                    df_tablo_gosterim = df_lgs[["deneme_adi", "Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net", "Toplam Net"]].rename(columns={"deneme_adi": "Deneme Sınavı"})
+                    st.dataframe(df_tablo_gosterim, hide_index=True, use_container_width=True)
 
 elif menu == "🛠️ Test Verisi Üret":
     st.header("Sisteme Rastgele Test Verisi Ekleme")
@@ -663,7 +769,6 @@ elif menu == "🛠️ Test Verisi Üret":
         durumlar = ["Yaptı", "Yarım", "Yapmadı", "Gelmedi"]
 
         with st.spinner("Sistem tohumlanıyor (Seeding)... Lütfen bekleyin."):
-            # 1. Öğrencileri Ekle
             ogrenciler_data = []
             for sinif in sinif_listesi:
                 secilenler = random.sample(isim_havuzu, 10)
@@ -671,7 +776,6 @@ elif menu == "🛠️ Test Verisi Üret":
                     ogrenciler_data.append({"ad_soyad": f"{isim} (Test)", "sinif": sinif})
             res_ogr = supabase.table("ogrenciler").insert(ogrenciler_data).execute()
 
-            # 2. Notları ve LGS verilerini hazırla
             notlar_data = []
             lgs_data = []
             ogr_sinif_map = {ogr['id']: ogr['sinif'] for ogr in res_ogr.data}
@@ -688,23 +792,22 @@ elif menu == "🛠️ Test Verisi Üret":
                         "proje": random.randint(70, 100)
                     })
                 if sinif == "8-A":
-                    for i in range(1, 4):
+                    for i in range(1, 9): # 8 adet deneme sınavı simüle ediliyor
                         lgs_data.append({
                             "ogrenci_id": ogr_id,
                             "deneme_adi": f"Deneme {i}",
-                            "turkce_d": random.randint(10, 20), "turkce_y": random.randint(0, 5),
-                            "mat_d": random.randint(5, 20), "mat_y": random.randint(0, 10),
-                            "fen_d": random.randint(10, 20), "fen_y": random.randint(0, 5),
-                            "ink_d": random.randint(5, 10), "ink_y": random.randint(0, 3),
-                            "din_d": random.randint(5, 10), "din_y": random.randint(0, 3),
-                            "ing_d": random.randint(5, 10), "ing_y": random.randint(0, 3)
+                            "turkce_d": random.randint(12, 20), "turkce_y": random.randint(0, 5),
+                            "mat_d": random.randint(6, 20), "mat_y": random.randint(0, 8),
+                            "fen_d": random.randint(12, 20), "fen_y": random.randint(0, 5),
+                            "ink_d": random.randint(6, 10), "ink_y": random.randint(0, 3),
+                            "din_d": random.randint(7, 10), "din_y": random.randint(0, 2),
+                            "ing_d": random.randint(6, 10), "ing_y": random.randint(0, 3)
                         })
 
             supabase.table("notlar").insert(notlar_data).execute()
             if lgs_data:
                 supabase.table("lgs_denemeleri").insert(lgs_data).execute()
 
-            # 3. Ödevleri Ekle
             odevler_data = []
             for sinif in sinif_listesi:
                 for brans in branslar:
@@ -718,7 +821,6 @@ elif menu == "🛠️ Test Verisi Üret":
                         })
             res_odev = supabase.table("odevler").insert(odevler_data).execute()
 
-            # 4. Ödev Teslimleri
             teslimler_data = []
             for odev in res_odev.data:
                 ilgili_ogrenciler = [k for k, v in ogr_sinif_map.items() if v == odev['sinif']]
