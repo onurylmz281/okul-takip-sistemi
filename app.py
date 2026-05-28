@@ -97,9 +97,10 @@ elif menu == "Öğrenci Profil Paneli":
             
             st.markdown(f"### 👤 {secilen_ogrenci} - Akademik Gelişim Özet Raporu")
             
+            # --- NOT VERİLERİ ---
             notlar_res = supabase.table("notlar").select("*").eq("ogrenci_id", ogr_id).execute()
             genel_ortalama = 0
-            df_html_notlar = ""
+            df_html_notlar = "<p>Not verisi bulunamadı.</p>"
             if notlar_res.data:
                 df_profil_notlar = pd.DataFrame(notlar_res.data)
                 df_gosterim = df_profil_notlar.rename(columns={
@@ -125,11 +126,12 @@ elif menu == "Öğrenci Profil Paneli":
             else:
                 st.info("Bu öğrenciye ait herhangi bir not verisi bulunmamaktadır.")
             
+            # --- ÖDEV VERİLERİ ---
             odevler_res = supabase.table("odev_teslimleri").select("*").eq("ogrenci_id", ogr_id).execute()
             odev_orani = 0
             genel_graph_base64 = ""
             pdf_brans_grafikleri_html = ""
-            df_html_odevler = ""
+            df_html_odevler = "<p>Ödev verisi bulunamadı.</p>"
             
             if odevler_res.data:
                 df_odevler_all = pd.DataFrame(odevler_res.data)
@@ -233,10 +235,80 @@ elif menu == "Öğrenci Profil Paneli":
             else:
                 st.info("Bu öğrenciye ait ödev değerlendirmesi bulunmamaktadır.")
 
+            # --- SİDEBAR BİLGİLERİ ---
             st.sidebar.markdown("---")
             st.sidebar.subheader("Öğrenci Genel Durumu")
             st.sidebar.metric("Genel Not Ortalaması", f"{genel_ortalama} / 100")
             st.sidebar.metric("Ödev Tamamlama Oranı", f"% {odev_orani}")
+            
+            # --- ÖĞRENCİ PROFİL RAPORU PDF İNDİRME BÖLÜMÜ ---
+            html_odev_grafikleri = ""
+            if genel_graph_base64:
+                html_odev_grafikleri = f"""
+                <div style="text-align: center; margin-top: 15px;">
+                    <div style="display: inline-block; width: 45%; vertical-align: top;">
+                        <b>Genel Ödev Dağılımı</b><br>
+                        <img src="data:image/png;base64,{genel_graph_base64}" style="max-width: 250px;">
+                    </div>
+                    <div style="display: inline-block; width: 50%; vertical-align: top;">
+                        <b>Ders Bazlı Ödev Dağılımları</b><br>
+                        {pdf_brans_grafikleri_html}
+                    </div>
+                </div>
+                """
+
+            profil_pdf_html = f"""
+            <html>
+            <head>
+            <meta charset="utf-8">
+            <title>Öğrenci Profil Raporu</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 35px; color: #333; }}
+                .title {{ text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 5px; }}
+                .subtitle {{ text-align: center; font-size: 14px; color: #555; margin-bottom: 25px; }}
+                .kv-table {{ width: 100%; border: none; margin-bottom: 20px; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }}
+                th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
+                th {{ background-color: #f5f5f5; font-weight: bold; }}
+                .section-title {{ font-size: 15px; font-weight: bold; color: #fff; background-color: #2196F3; padding: 6px 10px; margin-top: 25px; border-radius: 3px; }}
+                .summary-box {{ background-color: #f9fbfd; border-left: 4px solid #4CAF50; padding: 12px; margin-top: 15px; font-size: 13px; text-align: center; }}
+            </style>
+            </head>
+            <body onload="window.print()">
+                <div class="title">ÖĞRENCİ AKADEMİK PROFİL RAPORU</div>
+                <div class="subtitle">Not ve Ödev Gelişim Dökümü</div>
+                
+                <table class="kv-table">
+                    <tr>
+                        <td style="text-align:left; border:none; font-size:14px;"><b>Öğrenci Adı Soyadı:</b> {secilen_ogrenci}</td>
+                        <td style="text-align:right; border:none; font-size:14px;"><b>Sınıfı:</b> {secilen_sinif} | <b>Rapor Tarihi:</b> {date.today().strftime('%d.%m.%Y')}</td>
+                    </tr>
+                </table>
+                
+                <div class="summary-box">
+                    <b>Genel Not Ortalaması:</b> {genel_ortalama} / 100 &nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp; <b>Ödev Tamamlama Oranı:</b> % {odev_orani}
+                </div>
+                
+                <div class="section-title">📊 Branş Bazlı Not Durumu</div>
+                {df_html_notlar}
+                
+                <div class="section-title">📚 Ödev Dağılım İstatistikleri</div>
+                {html_odev_grafikleri}
+                
+                <div class="section-title">📝 Ödev Sorumluluk Listesi</div>
+                {df_html_odevler}
+            </body>
+            </html>
+            """
+            
+            st.divider()
+            st.write("#### 💾 Öğrenci Profil Raporunu Dışa Aktar")
+            st.download_button(
+                label="📄 Profil Raporunu PDF İndir",
+                data=profil_pdf_html,
+                file_name=f"{secilen_ogrenci}_Profil_Raporu.html",
+                mime="text/html"
+            )
 
 # --- NOT TAKİP ---
 elif menu == "Not Takip":
@@ -764,7 +836,6 @@ elif menu == "LGS Takip":
                                 })
                             df_fark = pd.DataFrame(fark_verisi)
                             
-                            # --- CRITICAL FIX: KEYERROR ENGINE REPAIR ---
                             df_dersler_fark = df_fark.iloc[:-2].copy() # Önce son 2 satırı (Toplam Net, Puan) ayırıyoruz
                             df_dersler_fark["_f"] = pd.to_numeric(df_dersler_fark["_f"]) # Güvenli dönüşüm
                             
@@ -845,7 +916,7 @@ elif menu == "LGS Takip":
                             st.write("#### 💾 Seçili Sınav Karşılaştırma Dökümünü PDF İndir")
                             st.download_button("📄 Karşılaştırma Raporunu PDF İndir", html_karsilastirma, file_name=f"{secilen_ogr_analiz}_Karsilastirma.html", mime="text/html")
 
-                    # GLOBAL SÜREÇ PDF ÇIKTI RECONSTRUCTION (TABS DIŞINDA EN ALTTA)
+                    # GLOBAL SÜREÇ PDF ÇIKTI
                     fig_pdf, ax_pdf = plt.subplots(figsize=(6, 3))
                     ax_pdf.plot(df_lgs["deneme_adi"], df_lgs["lgs_puani"], marker='o', color='#2196F3', linewidth=2)
                     ax_pdf.set_ylabel('Puan', color='#2196F3')
@@ -996,8 +1067,8 @@ elif menu == "🛠️ Test Verisi Üret":
 
             teslimler_data = []
             for odev in res_odev.data:
-                ilgili_ogrenciler = [k for k, v in ogr_sinif_map.items() if v == odev['sinif']]
-                for ogr_id in ilgili_ogrenciler:
+                helpful_students = [k for k, v in ogr_sinif_map.items() if v == odev['sinif']]
+                for ogr_id in helpful_students:
                     teslimler_data.append({
                         "odev_id": odev['id'], "ogrenci_id": ogr_id, "durum": random.choice(durumlar), "ogretmen_notu": "Test notu."
                     })
