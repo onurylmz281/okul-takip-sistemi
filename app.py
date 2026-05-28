@@ -23,7 +23,7 @@ if not st.session_state.giris_yapildi:
         
         with st.form("giris_formu"):
             k_adi = st.text_input("Kullanıcı Adı")
-            sifre = st.text_input("Şifre", type="password")
+            sifre = st.text_input("Şre", type="password")
             giris_butonu = st.form_submit_button("Giriş Yap", use_container_width=True)
             
             if giris_butonu:
@@ -34,7 +34,7 @@ if not st.session_state.giris_yapildi:
                     st.error("Hatalı kullanıcı adı veya şifre.")
     st.stop() 
 
-# --- GİRİŞ BAŞARILIYSA AŞAĞIDAKİ KODLAR ÇWALISIR ---
+# --- GİRİŞ BAŞARILIYSA AŞAĞIDAKİ KODLAR ÇALIŞIR ---
 
 @st.cache_resource
 def init_connection():
@@ -95,6 +95,7 @@ elif menu == "Öğrenci Profil Paneli":
             
             st.markdown(f"### 👤 {secilen_ogrenci} - Akademik Gelişim Özet Raporu")
             
+            # --- NOT VERİLERİ VE TABLOSU ---
             notlar_res = supabase.table("notlar").select("*").eq("ogrenci_id", ogr_id).execute()
             genel_ortalama = 0
             df_html_notlar = ""
@@ -123,6 +124,7 @@ elif menu == "Öğrenci Profil Paneli":
             else:
                 st.info("Bu öğrenciye ait herhangi bir not verisi bulunmamaktadır.")
             
+            # --- ÖDEV VERİLERİ VE DİNAMİK FİLTRELEME ---
             odevler_res = supabase.table("odev_teslimleri").select("*").eq("ogrenci_id", ogr_id).execute()
             odev_orani = 0
             genel_graph_base64 = ""
@@ -623,7 +625,6 @@ elif menu == "LGS Takip":
                     if s_veri_res.data:
                         df_s = pd.DataFrame(s_veri_res.data)
                         
-                        # KeyError Koruması: Sütun kontrolü ve zorunlu dönüşüm
                         if "lgs_puani" not in df_s.columns:
                             df_s["lgs_puani"] = 200.0
                         df_s["lgs_puani"] = pd.to_numeric(df_s["lgs_puani"], errors='coerce').fillna(200.0)
@@ -646,7 +647,6 @@ elif menu == "LGS Takip":
                         st.subheader(f"🏆 {secili_deneme_analiz} Sınavı - Başarı ve Puan Sıralaması")
                         st.dataframe(tablo_s, hide_index=True, use_container_width=True)
                         
-                        # Sınıf sıralaması yazdırılabilir formu
                         html_tablo_s = tablo_s.to_html(border=1, index=False, justify='center')
                         html_icerik_s = f"""
                         <html>
@@ -673,7 +673,6 @@ elif menu == "LGS Takip":
                 else:
                     df_lgs = pd.DataFrame(lgs_res.data)
                     
-                    # KeyError Koruması: Sütun kontrolü ve zorunlu dönüşüm
                     if "lgs_puani" not in df_lgs.columns:
                         df_lgs["lgs_puani"] = 200.0
                     df_lgs["lgs_puani"] = pd.to_numeric(df_lgs["lgs_puani"], errors='coerce').fillna(200.0)
@@ -718,7 +717,6 @@ elif menu == "LGS Takip":
                     st.markdown(f"- **⚠️ Performans Dalgalanma Riski (Yüksek Standart Sapma):** :red[{en_dalgalan_ders}] (Öğrencinin bu dersin sınav kazanımlarında odaklanma sorunu veya bilgi eksiği olabilir.)")
                     st.markdown(f"- **📈 Son Sınav İlerleme İvmesi:** <span style='color:{ivme_renk}; font-weight:bold;'>{ivme_metni}</span>", unsafe_allow_html=True)
                     
-                    # Rapor Grafiği Yapılandırması
                     fig_pdf, ax_pdf = plt.subplots(figsize=(6, 3))
                     ax_pdf.plot(df_lgs["deneme_adi"], df_lgs["lgs_puani"], marker='o', color='#2196F3', linewidth=2, label="LGS Puanı")
                     ax_pdf.set_ylabel('Puan', color='#2196F3')
@@ -848,15 +846,33 @@ elif menu == "🛠️ Test Verisi Üret":
                     })
                 if sinif == "8-A":
                     for i in range(1, 9): 
+                        t_d, t_y = random.randint(12, 19), random.randint(0, 5)
+                        m_d, m_y = random.randint(6, 15), random.randint(0, 8)
+                        f_d, f_y = random.randint(12, 18), random.randint(0, 5)
+                        i_d, i_y = random.randint(6, 10), random.randint(0, 3)
+                        d_d, d_y = random.randint(7, 10), random.randint(0, 2)
+                        ing_d, ing_y = random.randint(6, 10), random.randint(0, 3)
+                        
+                        # Net hesaplama
+                        t_n = t_d - (t_y / 3)
+                        m_n = m_d - (m_y / 3)
+                        f_n = f_d - (f_y / 3)
+                        i_n = i_d - (i_y / 3)
+                        d_n = d_d - (d_y / 3)
+                        ing_n = ing_d - (ing_y / 3)
+                        
+                        # Katsayı kurgusuna göre net-puan paralelliği
+                        puan_hesap = 200 + (t_n * 4.2) + (m_n * 4.2) + (f_n * 4.2) + (i_n * 1.6) + (d_n * 1.6) + (ing_n * 1.6)
+                        
                         lgs_data.append({
                             "ogrenci_id": ogr_id, "deneme_adi": f"Deneme {i}",
-                            "turkce_d": random.randint(12, 19), "turkce_y": random.randint(0, 5),
-                            "mat_d": random.randint(6, 15), "mat_y": random.randint(0, 8),
-                            "fen_d": random.randint(12, 18), "fen_y": random.randint(0, 5),
-                            "ink_d": random.randint(6, 10), "ink_y": random.randint(0, 3),
-                            "din_d": random.randint(7, 10), "din_y": random.randint(0, 2),
-                            "ing_d": random.randint(6, 10), "ing_y": random.randint(0, 3),
-                            "lgs_puani": float(random.randint(260, 485))
+                            "turkce_d": t_d, "turkce_y": t_y,
+                            "mat_d": m_d, "mat_y": m_y,
+                            "fen_d": f_d, "fen_y": f_y,
+                            "ink_d": i_d, "ink_y": i_y,
+                            "din_d": d_d, "din_y": d_y,
+                            "ing_d": ing_d, "ing_y": ing_y,
+                            "lgs_puani": round(float(puan_hesap), 2)
                         })
 
             supabase.table("notlar").insert(notlar_data).execute()
