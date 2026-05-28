@@ -8,10 +8,10 @@ import io
 import base64
 import random
 
-# Sayfa Ayarları (Streamlit'te her zaman en üstte olmalıdır)
+# Sayfa Ayarları
 st.set_page_config(page_title="Okul Takip Sistemi", layout="wide")
 
-# --- OTURUM (LOGIN) YÖNETİMİ ---
+# --- OTURUM YÖNETİMİ ---
 if "giris_yapildi" not in st.session_state:
     st.session_state.giris_yapildi = False
 
@@ -34,8 +34,7 @@ if not st.session_state.giris_yapildi:
                     st.error("Hatalı kullanıcı adı veya şifre.")
     st.stop() 
 
-# --- GİRİŞ BAŞARILIYSA AŞAĞIDAKİ KODLAR ÇALIŞIR ---
-
+# --- BAĞLANTI ---
 @st.cache_resource
 def init_connection():
     url = st.secrets["SUPABASE_URL"]
@@ -57,6 +56,7 @@ menu = st.sidebar.radio("Modüller", ["Öğrenci Yönetimi", "Öğrenci Profil P
 
 sinif_listesi = ["5-A", "6-A", "7-A", "8-A"]
 
+# --- ÖĞRENCİ YÖNETİMİ ---
 if menu == "Öğrenci Yönetimi":
     st.header("Öğrenci Yönetimi")
     secilen_sinif = st.selectbox("Sınıf Seçin", sinif_listesi)
@@ -78,6 +78,7 @@ if menu == "Öğrenci Yönetimi":
     else:
         st.info("Kayıtlı öğrenci bulunmamaktadır.")
 
+# --- ÖĞRENCİ PROFİL PANELİ ---
 elif menu == "Öğrenci Profil Paneli":
     st.header("Öğrenci Profil Paneli")
     secilen_sinif = st.selectbox("Sınıf Seçin", sinif_listesi, key="profil_sinif")
@@ -219,10 +220,6 @@ elif menu == "Öğrenci Profil Paneli":
                                 plt.close(fig)
                                 pdf_brans_grafikleri_html += f'<div style="display: inline-block; width: 45%; margin: 2%; text-align: center; vertical-align: top;"><img src="data:image/png;base64,{img_b64}" style="width: 100%; max-width: 240px;"></div>'
                                 idx += 1
-                        else:
-                            st.warning("Ders bazlı analiz için veri bulunamadı.")
-                    else:
-                        st.warning("Seçilen kriterlere uygun ödev kaydı bulunamadığından grafik oluşturulamadı.")
                 
                 with col_tablo:
                     st.write("**Filtrelenmiş Ödev Sorumluluk Listesi**")
@@ -236,6 +233,7 @@ elif menu == "Öğrenci Profil Paneli":
             st.sidebar.metric("Genel Not Ortalaması", f"{genel_ortalama} / 100")
             st.sidebar.metric("Ödev Tamamlama Oranı", f"% {odev_orani}")
 
+# --- NOT TAKİP ---
 elif menu == "Not Takip":
     st.header(f"Not Takip Paneli - {secilen_brans}")
     secilen_sinif = st.selectbox("Sınıf Seçin", sinif_listesi, key="not_sinif")
@@ -243,7 +241,7 @@ elif menu == "Not Takip":
     ogrenciler_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif).execute()
     
     if not ogrenciler_res.data:
-        st.warning("Bu sınıfa ait öğrenci kaydı bulunmuyor. Lütfen 'Öğrenci Yönetimi' sekmesinden kayıt ekleyin.")
+        st.warning("Bu sınıfa ait öğrenci kaydı bulunmuyor.")
     else:
         ogrenciler = ogrenciler_res.data
         ogrenci_idler = [ogr["id"] for ogr in ogrenciler]
@@ -285,9 +283,7 @@ elif menu == "Not Takip":
                 "Öğrenci ID": None, 
                 "Ad Soyad": st.column_config.TextColumn(disabled=True),
                 "Ortalama": st.column_config.NumberColumn(disabled=True)
-            },
-            hide_index=True,
-            use_container_width=True
+            }, hide_index=True, use_container_width=True
         )
         
         if st.button("Notları Veri Tabanına Kaydet", type="primary"):
@@ -315,6 +311,7 @@ elif menu == "Not Takip":
             st.success("Notlar başarıyla kaydedildi.")
             st.rerun()
 
+# --- ÖDEV TAKİP ---
 elif menu == "Ödev Takip":
     st.header(f"Ödev Takip Modülü - {secilen_brans}")
     tab1, tab2, tab3 = st.tabs(["📝 Yeni Ödev Tanımla", "✅ Ödev Düzenle / Değerlendir", "📊 Ödev Raporları"])
@@ -395,9 +392,7 @@ elif menu == "Ödev Takip":
                             required=True
                         ),
                         "Öğretmen Notu": st.column_config.TextColumn("Öğretmen Notu (Opsiyonel)")
-                    },
-                    hide_index=True,
-                    use_container_width=True
+                    }, hide_index=True, use_container_width=True
                 )
                 
                 if st.button("Değişiklikleri Veri Tabanına Kaydet", type="primary"):
@@ -475,22 +470,14 @@ elif menu == "Ödev Takip":
                 st.write(f"**{secilen_sinif_rapor} Sınıfı Ödev Takip Çizelgesi**")
                 st.dataframe(df_matris, use_container_width=True)
 
-                col_btn1, col_btn2 = st.columns(2)
-                html_tablo = df_matris.to_html(border=1, justify='center')
-                html_icerik_rapor = f"<html><head><meta charset='utf-8'><title>{secilen_sinif_rapor} Ödev Raporu</title></head><body onload='window.print()'><h2>{secilen_sinif_rapor} Sınıfı Ödev Takip Çizelgesi</h2>{html_tablo}</body></html>"
-                
-                with col_btn1:
-                    st.download_button(label="📄 PDF Olarak Kaydet", data=html_icerik_rapor, file_name=f"{secilen_sinif_rapor}_Odev_Raporu.html", mime="text/html")
-                with col_btn2:
-                    st.download_button(label="📊 Excel İçin İndir", data=df_matris.to_csv(index=True, sep=";", encoding="utf-8-sig").encode("utf-8-sig"), file_name=f"{secilen_sinif_rapor}_Odev_Raporu.csv", mime="text/csv")
-
+# --- LGS TAKİP MODÜLÜ ---
 elif menu == "LGS Takip":
     st.header("LGS Hazırlık ve Takip Modülü")
     
     sinif_8_listesi = [s for s in sinif_listesi if s.startswith("8")]
     
     if not sinif_8_listesi:
-        st.info("Sistemde kayıtlı 8. sınıf bulunmamaktadır. Bu modül sadece 8. sınıflar için aktiftir.")
+        st.info("Sistemde kayıtlı 8. sınıf bulunmamaktadır.")
     else:
         secilen_sinif_lgs = st.selectbox("Sınıf Seçin", sinif_8_listesi, key="lgs_sinif_secim")
         ogrenciler_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif_lgs).execute()
@@ -504,13 +491,12 @@ elif menu == "LGS Takip":
             
             tab_lgs1, tab_lgs2, tab_lgs3 = st.tabs(["📝 Deneme Notu İşlem Paneli", "📊 Sınıf Genel Sıralaması", "🎯 Öğrenci Özel Analizi"])
             
-            # --- TAB 1: DENEME NOTU İŞLEM PANELI ---
+            # --- LGS TAB 1: DENEME GİRİŞ ---
             with tab_lgs1:
                 islem_tipi = st.radio("İşlem Tipi Seçin:", ["➕ Yeni Deneme Girişi Yap", "✏️ Mevcut Denemeyi Düzenle / Sil"], horizontal=True)
                 
                 if islem_tipi == "➕ Yeni Deneme Girişi Yap":
                     deneme_adi = st.text_input("Yeni Deneme Sınavı Adı (Örn: Özdebir LGS-1)")
-                    
                     lgs_tablo_verisi = []
                     for ogr in ogrenciler:
                         lgs_tablo_verisi.append({
@@ -603,16 +589,14 @@ elif menu == "LGS Takip":
                                         "lgs_puani": float(row["LGS Puanı"]) if pd.notnull(row["LGS Puanı"]) else 200.0
                                     }
                                     k_id = row.get("Kayıt ID")
-                                    
                                     if pd.notnull(k_id):
                                         supabase.table("lgs_denemeleri").update(kayit_paketi).eq("id", int(k_id)).execute()
                                     else:
                                         supabase.table("lgs_denemeleri").insert(kayit_paketi).execute()
-                                
                                 st.success("Veriler başarıyla veri tabanına işlendi.")
                                 st.rerun()
 
-            # --- TAB 2: SINIF GENEL SIRALAMASI MATRİSİ ---
+            # --- LGS TAB 2: SINIF SIRALAMASI ---
             with tab_lgs2:
                 mevcut_denemeler_res = supabase.table("lgs_denemeleri").select("deneme_adi").in_("ogrenci_id", ogr_idler).execute()
                 if mevcut_denemeler_res.data:
@@ -622,9 +606,7 @@ elif menu == "LGS Takip":
                     s_veri_res = supabase.table("lgs_denemeleri").select("*").eq("deneme_adi", secili_deneme_analiz).in_("ogrenci_id", ogr_idler).execute()
                     if s_veri_res.data:
                         df_s = pd.DataFrame(s_veri_res.data)
-                        
-                        if "lgs_puani" not in df_s.columns:
-                            df_s["lgs_puani"] = 200.0
+                        if "lgs_puani" not in df_s.columns: df_s["lgs_puani"] = 200.0
                         df_s["lgs_puani"] = pd.to_numeric(df_s["lgs_puani"], errors='coerce').fillna(200.0)
                         
                         df_s["Öğrenci"] = df_s["ogrenci_id"].apply(lambda x: next((ogr["ad_soyad"] for ogr in ogrenciler if ogr["id"] == x), "Bilinmiyor"))
@@ -644,22 +626,10 @@ elif menu == "LGS Takip":
                         tablo_s = df_s[["Sınıf Derecesi", "Öğrenci", "Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net", "Toplam Net", "lgs_puani"]].rename(columns={"lgs_puani": "Girilen LGS Puanı"})
                         st.subheader(f"🏆 {secili_deneme_analiz} Sınavı - Başarı ve Puan Sıralaması")
                         st.dataframe(tablo_s, hide_index=True, use_container_width=True)
-                        
-                        html_tablo_s = tablo_s.to_html(border=1, index=False, justify='center')
-                        html_icerik_s = f"""
-                        <html>
-                        <head><meta charset='utf-8'><title>{secilen_sinif_lgs} Sıralama Raporu</title></head>
-                        <body onload='window.print()'>
-                            <h2 style='text-align:center;'>{secilen_sinif_lgs} Sınıfı {secili_deneme_analiz} Sınavı Başarı Sıralaması</h2>
-                            {html_tablo_s}
-                        </body>
-                        </html>
-                        """
-                        st.download_button(label="📄 Sınıf Genel Başarı Çizelgesini PDF İndir", data=html_icerik_s, file_name=f"{secilen_sinif_lgs}_{secili_deneme_analiz}_Siralama.html", mime="text/html")
                 else:
                     st.info("Sıralama oluşturulacak deneme sınavı kaydı bulunmuyor.")
 
-            # --- TAB 3: ÖĞRENCİ ÖZEL ANALİZİ ---
+            # --- LGS TAB 3: ÖĞRENCİ ÖZEL ANALİZİ VE KARŞILAŞTIRMA ---
             with tab_lgs3:
                 secilen_ogr_analiz = st.selectbox("Analiz Edilecek Öğrenciyi Seçin", list(ogr_secenekleri.keys()), key="lgs_ogr_secim_analiz")
                 secilen_ogr_id_analiz = ogr_secenekleri[secilen_ogr_analiz]
@@ -670,9 +640,7 @@ elif menu == "LGS Takip":
                     st.info("Bu öğrenciye ait herhangi bir LGS deneme dökümü bulunmamaktadır.")
                 else:
                     df_lgs = pd.DataFrame(lgs_res.data)
-                    
-                    if "lgs_puani" not in df_lgs.columns:
-                        df_lgs["lgs_puani"] = 200.0
+                    if "lgs_puani" not in df_lgs.columns: df_lgs["lgs_puani"] = 200.0
                     df_lgs["lgs_puani"] = pd.to_numeric(df_lgs["lgs_puani"], errors='coerce').fillna(200.0)
                     
                     df_lgs["Türkçe Net"] = df_lgs["turkce_d"] - (df_lgs["turkce_y"] / 3)
@@ -683,193 +651,123 @@ elif menu == "LGS Takip":
                     df_lgs["İngilizce Net"] = df_lgs["ing_d"] - (df_lgs["ing_y"] / 3)
                     df_lgs["Toplam Net"] = df_lgs[["Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net"]].sum(axis=1)
                     
-                    son_deneme_verisi = df_lgs.iloc[-1]
-                    ortalama_puan = round(df_lgs["lgs_puani"].mean(), 2)
-                    en_yuksek_puan = round(df_lgs["lgs_puani"].max(), 2)
+                    # Alt sekmeler (Genel Rapor vs Gelişmiş Karşılaştırma)
+                    sub_tab1, sub_tab2 = st.tabs(["📊 Genel Süreç Analiz Raporu", "⚖️ Gelişmiş Sınav Karşılaştırma (Head-to-Head)"])
                     
-                    col_m1, col_m2, col_m3 = st.columns(3)
-                    col_m1.metric("Son Sınav Gerçek Puanı", f"{son_deneme_verisi['lgs_puani']:.2f} Puan")
-                    col_m2.metric("Süreç Puan Ortalaması", f"{ortalama_puan} Puan")
-                    col_m3.metric("Ulaşılan En Yüksek Puan", f"{en_yuksek_puan} Puan")
-                    
-                    # --- ANLAŞILIR PEDAGOJİK HESAPLAMALAR VE AÇIKLAMALAR ---
-                    st.write("#### 🔍 Gelişmiş Pedagojik Bulgular ve Risk Analizleri")
-                    
-                    # 1. İsabet Oranı (Emin Olma Durumu) Hesaplaması
-                    toplam_dogru = int(son_deneme_verisi[["turkce_d", "mat_d", "fen_d", "ink_d", "din_d", "ing_d"]].sum())
-                    toplam_yanlis = int(son_deneme_verisi[["turkce_y", "mat_y", "fen_y", "ink_y", "din_y", "ing_y"]].sum())
-                    toplam_isaretlenen = toplam_dogru + toplam_yanlis
-                    
-                    isabet_orani = (toplam_dogru / toplam_isaretlenen * 100) if toplam_isaretlenen > 0 else 0
-                    
-                    st.markdown(f"**🎯 Sınav İsabet Oranı (Emin Olma Yüzdesi):** `%{isabet_orani:.1f}`")
-                    st.write("*Anlamı Nedir?* Bu metrik, öğrencinin sınavda işaretlediği soruların ne kadarından gerçekten emin olduğunu gösterir. "
-                             f"Öğrencinin son sınavdaki oranı **%{isabet_orani:.1f}** düzeyindedir. Oranın düşük çıkması, bilmediği halde "
-                             "çok fazla soruda tahmin yürüttüğünü (salladığını), boş bırakması gereken yerlerde gereksiz risk alarak net kaybettiğini gösterir. "
-                             "LGS sürecinde ideal isabet hedefi %85 ve üzeridir.")
-                    
-                    # 2. Standart Sapma (İstikrar Analizi) Hesaplaması
-                    ders_listesi = ["Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net"]
-                    std_sapmalar = df_lgs[ders_listesi].std().fillna(0)
-                    ortalamalar = df_lgs[ders_listesi].mean()
-                    
-                    en_istikrarsiz_ders = std_sapmalar.idxmax().replace(" Net", "")
-                    en_istikrar_ders = std_sapmalar.idxmin().replace(" Net", "")
-                    en_sapma_degeri = std_sapmalar.max()
-                    
-                    st.markdown(f"**📉 Standart Sapma (Performans Tutarlılığı ve İstikrar):** En yüksek dalgalanma olan ders: `{en_istikrarsiz_ders}` (Sapma Değeri: `{en_sapma_degeri:.2f}`)")
-                    st.write(f"*Anlamı Nedir?* Standart sapma, öğrencinin sınavdan sınava gösterdiği tutarlılığı ölçer. "
-                             f"Öğrencinin net dalgalanması en yüksek olan dersi **{en_istikrarsiz_ders}** branşıdır. "
-                             "Bu dersin netlerinin sınavlar arasında stabil kalmaması, bilgilerin henüz tam kalıcı olmadığını, "
-                             "kazanımların konudan konuya çok fazla değişkenlik gösterdiğini veya o derse ait sorularda anlık odaklanma / sınav kaygısı yaşandığını kanıtlar.")
-                    
-                    # 3. Branş İvmesi (Son 3 Sınav Gidişat Yönü)
-                    st.markdown("**📈 Branş İvmesi (Son 3 Sınavın Gidişat Yönelim Analizi):**")
-                    ivme_liste = []
-                    if len(df_lgs) >= 3:
-                        for ders in ders_listesi:
-                            ders_adi = ders.replace(" Net", "")
-                            son_3_veri = df_lgs[ders].iloc[-3:].tolist()
-                            # Basit lineer eğim / lokal fark hesabı
-                            egim = (son_3_veri[2] - son_3_veri[0]) / 2
-                            if egim > 0.5:
-                                ivme_liste.append(f"<li><b>{ders_adi}:</b> :green[Yükseliş İvmesinde] (+{egim:.2f} net gelişim hızı)</li>")
-                            elif egim < -0.5:
-                                ivme_liste.append(f"<li><b>{ders_adi}:</b> :red[Düşüş Eğiliminde] ({egim:.2f} net gerileme hızı)</li>")
+                    with sub_tab1:
+                        son_deneme_verisi = df_lgs.iloc[-1]
+                        ortalama_puan = round(df_lgs["lgs_puani"].mean(), 2)
+                        en_yuksek_puan = round(df_lgs["lgs_puani"].max(), 2)
+                        
+                        col_m1, col_m2, col_m3 = st.columns(3)
+                        col_m1.metric("Son Sınav Puanı", f"{son_deneme_verisi['lgs_puani']:.2f} Puan")
+                        col_m2.metric("Süreç Puan Ortalaması", f"{ortalama_puan} Puan")
+                        col_m3.metric("Ulaşılan En Yüksek Puan", f"{en_yuksek_puan} Puan")
+                        
+                        st.write("#### 📊 Süreç Gelişim Grafiği")
+                        st.line_chart(df_lgs[["deneme_adi", "Toplam Net", "lgs_puani"]].set_index("deneme_adi"))
+
+                    # YENİ: GELİŞMİŞ KARŞILAŞTIRMA MODÜLÜ
+                    with sub_tab2:
+                        st.write("Belirli iki sınavı seçerek doğrudan net değişimlerini ve ders gelişim/gerileme grafiklerini inceleyebilirsiniz.")
+                        deneme_listesi = df_lgs["deneme_adi"].tolist()
+                        
+                        # Varsayılan olarak son 2 denemeyi seçili getir
+                        varsayilan_secim = deneme_listesi[-2:] if len(deneme_listesi) >= 2 else deneme_listesi
+                        karsilastirma_secimi = st.multiselect("Karşılaştırılacak İki Sınavı Seçin", deneme_listesi, default=varsayilan_secim)
+                        
+                        if len(karsilastirma_secimi) != 2:
+                            st.warning("Lütfen tam olarak iki (2) adet deneme sınavı seçiniz.")
+                        else:
+                            d1_isim, d2_isim = karsilastirma_secimi[0], karsilastirma_secimi[1]
+                            d1_veri = df_lgs[df_lgs["deneme_adi"] == d1_isim].iloc[0]
+                            d2_veri = df_lgs[df_lgs["deneme_adi"] == d2_isim].iloc[0]
+                            
+                            ders_listesi = ["Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net"]
+                            
+                            # Delta tablosu oluşturma
+                            fark_verisi = []
+                            for ders in ders_listesi + ["Toplam Net", "lgs_puani"]:
+                                v1 = d1_veri[ders]
+                                v2 = d2_veri[ders]
+                                fark = v2 - v1
+                                
+                                durum_icon = "🟢" if fark > 0 else ("🔴" if fark < 0 else "⚪")
+                                fark_metni = f"+{fark:.2f} {durum_icon}" if fark > 0 else f"{fark:.2f} {durum_icon}"
+                                if fark == 0: fark_metni = "0.00 ⚪"
+                                
+                                formatli_ders = ders.replace("lgs_puani", "LGS Puanı")
+                                fark_verisi.append({
+                                    "Kriter": formatli_ders.replace(" Net", ""),
+                                    f"{d1_isim}": f"{v1:.2f}",
+                                    f"{d2_isim}": f"{v2:.2f}",
+                                    "Fark (Delta)": fark_metni,
+                                    "_raw_fark": fark # Sıralama ve metin üretimi için gizli sütun
+                                })
+                            
+                            df_fark = pd.DataFrame(fark_verisi)
+                            
+                            # Otomatik Yorum Üretimi
+                            sadece_dersler = df_fark[df_fark["Kriter"].isin([d.replace(" Net", "") for d in ders_listesi])]
+                            max_fark_row = sadece_dersler.loc[sadece_dersler["_raw_fark"].idxmax()]
+                            min_fark_row = sadece_dersler.loc[sadece_dersler["_raw_fark"].idxmin()]
+                            puan_farki = df_fark[df_fark["Kriter"] == "LGS Puanı"].iloc[0]["_raw_fark"]
+                            
+                            yorum_metni = f"Seçilen iki sınav arasında öğrenci **en büyük sıçramayı {max_fark_row['Kriter']} (+{max_fark_row['_raw_fark']:.2f} net)** dersinde yaparken, "
+                            if min_fark_row['_raw_fark'] < 0:
+                                yorum_metni += f"**en ciddi net kaybını {min_fark_row['Kriter']} ({min_fark_row['_raw_fark']:.2f} net)** dersinde yaşamıştır. "
                             else:
-                                ivme_liste.append(f"<li><b>{ders_adi}:</b> Yatay/Dengeli Seyir (İstikrarlı yapı korunuyor)</li>")
-                        st.markdown(f"<ul>{''.join(ivme_liste)}</ul>", unsafe_allow_html=True)
-                    else:
-                        st.write("Son 3 sınav yönelim ivmesinin hesaplanabilmesi için sistemde en az 3 deneme kaydı bulunmalıdır.")
-                        
-                    st.divider()
-                    
-                    # Rapor Grafiği Yapılandırması
-                    fig_pdf, ax_pdf = plt.subplots(figsize=(6, 3))
-                    ax_pdf.plot(df_lgs["deneme_adi"], df_lgs["lgs_puani"], marker='o', color='#2196F3', linewidth=2, label="LGS Puanı")
-                    ax_pdf.set_ylabel('Puan', color='#2196F3')
-                    ax_pdf.tick_params(axis='y', labelcolor='#2196F3')
-                    ax_pdf.grid(True, linestyle='--', alpha=0.4)
-                    
-                    ax_net = ax_pdf.twinx()
-                    ax_net.plot(df_lgs["deneme_adi"], df_lgs["Toplam Net"], marker='s', color='#4CAF50', linewidth=1.5, linestyle='--', label="Toplam Net")
-                    ax_net.set_ylabel('Toplam Net', color='#4CAF50')
-                    ax_net.tick_params(axis='y', labelcolor='#4CAF50')
-                    
-                    plt.title(f"{secilen_ogr_analiz} - Süreç İlerleme Trendi")
-                    buf_pdf = io.BytesIO()
-                    plt.savefig(buf_pdf, format='png', bbox_inches='tight', dpi=140)
-                    buf_pdf.seek(0)
-                    lgs_trend_b64 = base64.b64encode(buf_pdf.read()).decode('utf-8')
-                    plt.close(fig_pdf)
-                    
-                    st.write("#### 📊 Süreç Gelişim Grafiği")
-                    st.line_chart(df_lgs[["deneme_adi", "Toplam Net", "lgs_puani"]].set_index("deneme_adi"))
-                    
-                    df_pdf_tablo = df_lgs[["deneme_adi", "Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net", "Toplam Net", "lgs_puani"]].rename(columns={"deneme_adi":"Sınav", "lgs_puani":"LGS Puanı"})
-                    html_table_lgs = df_pdf_tablo.to_html(border=1, index=False, justify='center')
-                    
-                    # HTML tabanlı PDF rapor çıktısına pedagojik açıklamaların işlenmesi
-                    pdf_ivme_metinleri = ""
-                    if len(df_lgs) >= 3:
-                        pdf_ivme_metinleri = "<ul>" + "".join(ivme_liste).replace(":green[","<span style='color:green;font-weight:bold;'>").replace(":red[","<span style='color:red;font-weight:bold;'>").replace("]","</span>") + "</ul>"
-                    else:
-                        pdf_ivme_metinleri = "<p>Yönelim ivmesi hesabı için henüz yeterli deneme verisi girilmemiştir.</p>"
-
-                    lgs_pdf_html = f"""
-                    <html>
-                    <head>
-                    <meta charset="utf-8">
-                    <title>LGS Akademik Hazırlık Raporu</title>
-                    <style>
-                        body {{ font-family: Arial, sans-serif; margin: 35px; color: #333; }}
-                        .title {{ text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 5px; }}
-                        .subtitle {{ text-align: center; font-size: 14px; color: #555; margin-bottom: 25px; }}
-                        .kv-table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-                        .card-box {{ display: flex; justify-content: space-between; gap: 15px; margin-bottom: 25px; }}
-                        .card {{ flex: 1; border: 1px solid #ccc; padding: 12px; text-align: center; background-color: #fafafa; border-radius: 5px; }}
-                        .card h4 {{ margin: 0 0 6px 0; font-size: 12px; color: #666; text-transform: uppercase; }}
-                        .card p {{ margin: 0; font-size: 18px; font-weight: bold; color: #111; }}
-                        .section-title {{ font-size: 14px; font-weight: bold; color: #fff; background-color: #2196F3; padding: 6px 10px; margin-top: 25px; border-radius: 3px; }}
-                        table {{ width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }}
-                        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
-                        th {{ background-color: #f5f5f5; font-weight: bold; }}
-                        .graph-area {{ text-align: center; margin-top: 20px; }}
-                        .graph-img {{ width: 100%; max-width: 580px; height: auto; }}
-                        .pedagogic-box {{ font-size: 12px; line-height: 1.6; background-color: #f9fbfd; border-left: 4px solid #2196F3; padding: 15px; margin-top: 15px; }}
-                        .pedagogic-title {{ font-weight: bold; color: #111; margin-top: 10px; font-size: 13px; }}
-                    </style>
-                    </head>
-                    <body onload="window.print()">
-                        <div class="title">LGS HAZIRLIK SÜRECİ AKADEMİK RAPORU</div>
-                        <div class="subtitle">Veri Odaklı Rehberlik ve İlerleme Analiz Dökümü</div>
-                        
-                        <table class="kv-table" style="width:100%;">
-                            <tr>
-                                <td style="text-align:left; border:none; font-size:14px;"><b>Öğrenci Adı Soyadı:</b> {secilen_ogr_analiz}</td>
-                                <td style="text-align:right; border:none; font-size:14px;"><b>Sınıfı:</b> {secilen_sinif_lgs} | <b>Rapor Tarihi:</b> {date.today().strftime('%d.%m.%Y')}</td>
-                            </tr>
-                        </table>
-                        
-                        <div class="card-box">
-                            <div class="card">
-                                <h4>Son Sınav Skor Puanı</h4>
-                                <p>{son_deneme_verisi['lgs_puani']:.2f}</p>
-                            </div>
-                            <div class="card">
-                                <h4>Süreç Puan Ortalaması</h4>
-                                <p>{ortalama_puan}</p>
-                            </div>
-                            <div class="card">
-                                <h4>Ulaşılan En Yüksek Puan</h4>
-                                <p>{en_yuksek_puan}</p>
-                            </div>
-                        </div>
-                        
-                        <div class="section-title">📊 Deneme Sınavları Net ve Skor Dağılım Geçmişi</div>
-                        {html_table_lgs}
-                        
-                        <div class="section-title"> odds📈 Süreç İlerleme ve Başarı Grafiği</div>
-                        <div class="graph-area">
-                            <img class="graph-img" src="data:image/png;base64,{lgs_trend_b64}">
-                        </div>
-                        
-                        <div class="section-title">🎯 Rehberlik Analizi ve Pedagojik Süreç Bulguları</div>
-                        <div class="pedagogic-box">
-                            <div class="pedagogic-title">1. Sınav İsabet Oranı (Emin Olma Yüzdesi): %{isabet_orani:.1f}</div>
-                            Bu metrik, öğrencinin işaretlediği sorular içindeki doğru oranını, dolayısıyla tahmine dayalı risk alıp almadığını gösterir. Öğrencinin oranı %{isabet_orani:.1f} seviyesindedir. Düşük olması, boş bırakması gereken sorularda emin olmadığı halde işaretleme yaparak net kaybettiğini doğrular.
+                                yorum_metni += f"hiçbir derste net gerilemesi yaşamamıştır (En düşük artış/sabitlik: {min_fark_row['Kriter']}). "
                             
-                            <div class="pedagogic-title">2. Standart Sapma (Performans Tutarlılığı ve İstikrar): {en_istikrarsiz_ders}</div>
-                            Standart sapma, netlerin sınavlar arasındaki dalgalanmasını ölçer. En yüksek dalgalanma <b>{en_istikrarsiz_ders}</b> branşındadır. Bu durum, kazanımların tam kalıcı olmadığını, net gidişatının sınav zorluğuna veya konu türüne göre stabil olmadığını gösterir.
-                            
-                            <div class="pedagogic-title">3. Branş İvmesi (Son 3 Sınavın Net Hızı Gidişatı):</div>
-                            Son 3 deneme temel alınarak hesaplanan lokal ders ivme yönelimleri aşağıda listelenmiştir:
-                            {pdf_ivme_metinleri}
-                        </div>
-                    </body>
-                    </html>
-                    """
-                    st.divider()
-                    st.write("#### 💾 Bireysel Gelişim Raporunu Dışa Aktar")
-                    st.download_button(
-                        label="📄 LGS Özel Hazırlık Raporunu PDF İndir",
-                        data=lgs_pdf_html,
-                        file_name=f"{secilen_ogr_analiz}_LGS_Akademik_Raporu.html",
-                        mime="text/html"
-                    )
+                            puan_yonu = "pozitif yönlü" if puan_farki > 0 else ("negatif yönlü" if puan_farki < 0 else "sabit")
+                            yorum_metni += f"Genel toplam puanda ise **{puan_yonu} ({'+' if puan_farki>0 else ''}{puan_farki:.2f} Puan)** bir değişim görülmektedir."
 
+                            st.info(f"**🤖 Otomatik Analiz:** {yorum_metni}")
+                            
+                            col_radar, col_tablo = st.columns([1, 1])
+                            
+                            with col_radar:
+                                st.write(f"**Radar Karşılaştırma Grafiği**")
+                                # Matplotlib Radar Chart
+                                angles = [n / float(len(ders_listesi)) * 2 * np.pi for n in range(len(ders_listesi))]
+                                angles += angles[:1]
+                                
+                                fig_radar, ax_radar = plt.subplots(figsize=(4, 4), subplot_kw=dict(polar=True))
+                                
+                                val1 = d1_veri[ders_listesi].values.flatten().tolist()
+                                val1 += val1[:1]
+                                ax_radar.plot(angles, val1, linewidth=2, linestyle='solid', label=d1_isim, color='#2196F3')
+                                ax_radar.fill(angles, val1, '#2196F3', alpha=0.2)
+                                
+                                val2 = d2_veri[ders_listesi].values.flatten().tolist()
+                                val2 += val2[:1]
+                                ax_radar.plot(angles, val2, linewidth=2, linestyle='solid', label=d2_isim, color='#FF9800')
+                                ax_radar.fill(angles, val2, '#FF9800', alpha=0.2)
+                                
+                                ax_radar.set_xticks(angles[:-1])
+                                ax_radar.set_xticklabels([d.replace(' Net', '') for d in ders_listesi], size=8)
+                                ax_radar.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), fontsize=8)
+                                
+                                st.pyplot(fig_radar)
+                                plt.close(fig_radar)
+                                
+                            with col_tablo:
+                                st.write(f"**Net ve Puan Değişim Tablosu**")
+                                st.dataframe(df_fark.drop(columns=["_raw_fark"]), hide_index=True, use_container_width=True)
+
+# --- TEST VERİSİ ÜRETİMİ ---
 elif menu == "🛠️ Test Verisi Üret":
     st.header("Sisteme Rastgele Test Verisi Ekleme")
     st.warning("Bu işlem veritabanınıza rastgele öğrenciler, notlar ve ödevler ekleyecektir. Gerçek verilerinizle karışmaması için öğrencilerin ismine '(Test)' ibaresi eklenecektir.")
 
     if st.button("Verileri Üret ve Sisteme Yükle", type="primary"):
-        isim_havuzu = ["Ahmet Yılmaz", "Ayşe Kaya", "Mehmet Demir", "Fatma Çelik", "Ali Can", "Zeynep Şahin", "Mustafa Yıldız", "Elif Özdemir", "Hasan Aydın", "Hatice Arslan", "Burak Polat", "Büşra Çetin", "Emre Erdoğan", "Merve Koç", "Oğuzhan Şen", "Ceren Yavuz", "Yunus Emre", "İrem Kurt", "Okan Aslan", "Selin Kılıç"]
+        isim_havuzu = ["Ahmet Yılmaz", "Ayşe Kaya", "Mehmet Demir", "Fatma Çelik", "Ali Can", "Zeynep Şahin", "Mustafa Yıldız", "Elif Özdemir", "Hasan Aydın", "Hatice Arslan"]
         durumlar = ["Yaptı", "Yarım", "Yapmadı", "Gelmedi"]
 
         with st.spinner("Sistem tohumlanıyor (Seeding)... Lütfen bekleyin."):
             ogrenciler_data = []
             for sinif in sinif_listesi:
-                secilenler = random.sample(isim_havuzu, 10)
+                secilenler = random.sample(isim_havuzu, 5)
                 for isim in secilenler:
                     ogrenciler_data.append({"ad_soyad": f"{isim} (Test)", "sinif": sinif})
             res_ogr = supabase.table("ogrenciler").insert(ogrenciler_data).execute()
@@ -895,7 +793,6 @@ elif menu == "🛠️ Test Verisi Üret":
                         d_d, d_y = random.randint(7, 10), random.randint(0, 2)
                         ing_d, ing_y = random.randint(6, 10), random.randint(0, 3)
                         
-                        # Net hesabı
                         t_n = t_d - (t_y / 3)
                         m_n = m_d - (m_y / 3)
                         f_n = f_d - (f_y / 3)
@@ -903,17 +800,13 @@ elif menu == "🛠️ Test Verisi Üret":
                         d_n = d_d - (d_y / 3)
                         ing_n = ing_d - (ing_y / 3)
                         
-                        # Katsayı tabanlı tutarlı puan hesabı
                         puan_hesap = 200 + (t_n * 4.2) + (m_n * 4.2) + (f_n * 4.2) + (i_n * 1.6) + (d_n * 1.6) + (ing_n * 1.6)
                         
                         lgs_data.append({
                             "ogrenci_id": ogr_id, "deneme_adi": f"Deneme {i}",
-                            "turkce_d": t_d, "turkce_y": t_y,
-                            "mat_d": m_d, "mat_y": my,
-                            "fen_d": f_d, "fen_y": f_y,
-                            "ink_d": i_d, "ink_y": i_y,
-                            "din_d": d_d, "din_y": d_y,
-                            "ing_d": ing_d, "ing_y": ing_y,
+                            "turkce_d": t_d, "turkce_y": t_y, "mat_d": m_d, "mat_y": m_y,
+                            "fen_d": f_d, "fen_y": f_y, "ink_d": i_d, "ink_y": i_y,
+                            "din_d": d_d, "din_y": d_y, "ing_d": ing_d, "ing_y": ing_y,
                             "lgs_puani": round(float(puan_hesap), 2)
                         })
 
@@ -927,8 +820,7 @@ elif menu == "🛠️ Test Verisi Üret":
                     for i in range(1, 4):
                         odevler_data.append({
                             "brans": brans, "sinif": sinif, "odev_adi": f"Test Ödevi {i}",
-                            "aciklama": "Sistem testi için otomatik oluşturuldu.",
-                            "teslim_tarihi": str(date.today() - timedelta(days=random.randint(1, 15)))
+                            "aciklama": "Otomatik oluşturuldu.", "teslim_tarihi": str(date.today() - timedelta(days=random.randint(1, 15)))
                         })
             res_odev = supabase.table("odevler").insert(odevler_data).execute()
 
