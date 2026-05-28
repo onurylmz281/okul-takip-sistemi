@@ -655,7 +655,6 @@ elif menu == "Ödev Takip":
 elif menu == "LGS Takip":
     st.header("LGS Takip Modülü")
     
-    # Sadece 8 ile başlayan sınıfları filtrele
     sinif_8_listesi = [s for s in sinif_listesi if s.startswith("8")]
     
     if not sinif_8_listesi:
@@ -674,57 +673,83 @@ elif menu == "LGS Takip":
             tab_lgs1, tab_lgs2 = st.tabs(["📝 Deneme Notu Girişi", "📊 Başarı ve Gelişim Analizi"])
             
             with tab_lgs1:
-                secilen_ogr_lgs = st.selectbox("Öğrenci Seçin", list(ogr_secenekleri.keys()), key="lgs_ogr_secim_giris")
-                secilen_ogr_id = ogr_secenekleri[secilen_ogr_lgs]
+                deneme_adi = st.text_input("Deneme Sınavı Adı (Örn: Özdebir 1, TÖDER, Kurumsal-1)")
                 
-                with st.form("lgs_not_giris_formu", clear_on_submit=True):
-                    deneme_adi = st.text_input("Deneme Sınavı Adı (Örn: Deneme 1, Özdebir vb.)")
-                    st.write("---")
-                    st.write("**Doğru ve Yanlış Sayılarını Giriniz** (3 Yanlış 1 Doğruyu Götürür)")
-                    
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        st.markdown("##### 📕 Sözel Dersler")
-                        turkce_d = st.number_input("Türkçe Doğru (Maks 20)", min_value=0, max_value=20, value=0)
-                        turkce_y = st.number_input("Türkçe Yanlış", min_value=0, max_value=20, value=0)
-                        st.divider()
-                        ink_d = st.number_input("İnkılap T. Doğru (Maks 10)", min_value=0, max_value=10, value=0)
-                        ink_y = st.number_input("İnkılap T. Yanlış", min_value=0, max_value=10, value=0)
-                    
-                    with c2:
-                        st.markdown("##### 📘 Sayısal Dersler")
-                        mat_d = st.number_input("Matematik Doğru (Maks 20)", min_value=0, max_value=20, value=0)
-                        mat_y = st.number_input("Matematik Yanlış", min_value=0, max_value=20, value=0)
-                        st.divider()
-                        din_d = st.number_input("Din Kültürü Doğru (Maks 10)", min_value=0, max_value=10, value=0)
-                        din_y = st.number_input("Din Kültürü Yanlış", min_value=0, max_value=10, value=0)
+                # Sınıftaki tüm öğrenciler için varsayılan matris verisi üretimi
+                lgs_tablo_verisi = []
+                for ogr in ogrenciler:
+                    lgs_tablo_verisi.append({
+                        "Öğrenci ID": ogr["id"],
+                        "Öğrenci Adı": ogr["ad_soyad"],
+                        "Türkçe D": 0, "Türkçe Y": 0,
+                        "Matematik D": 0, "Matematik Y": 0,
+                        "Fen D": 0, "Fen Y": 0,
+                        "İnkılap D": 0, "İnkılap Y": 0,
+                        "Din D": 0, "Din Y": 0,
+                        "İngilizce D": 0, "İngilizce Y": 0
+                    })
+                
+                df_lgs_toplu = pd.DataFrame(lgs_tablo_verisi)
+                
+                st.write("Aşağıdaki tabloya sınıftaki tüm öğrencilerin Doğru (D) ve Yanlış (Y) sayılarını toplu olarak girebilirsiniz. Hücreler arasında yön tuşları veya TAB tuşu ile klavyeden hızlıca geçiş yapabilirsiniz.")
+                
+                duzenlenmis_lgs_df = st.data_editor(
+                    df_lgs_toplu,
+                    column_config={
+                        "Öğrenci ID": None, # Kullanıcıdan gizli tutulur
+                        "Öğrenci Adı": st.column_config.TextColumn(disabled=True),
+                        "Türkçe D": st.column_config.NumberColumn(min_value=0, max_value=20, step=1, default=0),
+                        "Türkçe Y": st.column_config.NumberColumn(min_value=0, max_value=20, step=1, default=0),
+                        "Matematik D": st.column_config.NumberColumn(min_value=0, max_value=20, step=1, default=0),
+                        "Matematik Y": st.column_config.NumberColumn(min_value=0, max_value=20, step=1, default=0),
+                        "Fen D": st.column_config.NumberColumn(min_value=0, max_value=20, step=1, default=0),
+                        "Fen Y": st.column_config.NumberColumn(min_value=0, max_value=20, step=1, default=0),
+                        "İnkılap D": st.column_config.NumberColumn(min_value=0, max_value=10, step=1, default=0),
+                        "İnkılap Y": st.column_config.NumberColumn(min_value=0, max_value=10, step=1, default=0),
+                        "Din D": st.column_config.NumberColumn(min_value=0, max_value=10, step=1, default=0),
+                        "Din Y": st.column_config.NumberColumn(min_value=0, max_value=10, step=1, default=0),
+                        "İngilizce D": st.column_config.NumberColumn(min_value=0, max_value=10, step=1, default=0),
+                        "İngilizce Y": st.column_config.NumberColumn(min_value=0, max_value=10, step=1, default=0),
+                    },
+                    hide_index=True,
+                    use_container_width=True
+                )
+                
+                if st.button("Toplu Deneme Sonuçlarını Kaydet", type="primary", use_container_width=True):
+                    if not deneme_adi:
+                        st.error("Lütfen verileri kaydetmeden önce yukarıdaki alana deneme sınavı adını giriniz!")
+                    else:
+                        toplu_kayit_listesi = []
+                        hata_var_mi = False
                         
-                    with c3:
-                        st.markdown("##### 🔬 Fen & Yabancı Dil")
-                        fen_d = st.number_input("Fen Bilimleri Doğru (Maks 20)", min_value=0, max_value=20, value=0)
-                        fen_y = st.number_input("Fen Bilimleri Yanlış", min_value=0, max_value=20, value=0)
-                        st.divider()
-                        ing_d = st.number_input("İngilizce Doğru (Maks 10)", min_value=0, max_value=10, value=0)
-                        ing_y = st.number_input("İngilizce Yanlış", min_value=0, max_value=10, value=0)
-                        
-                    lgs_submit = st.form_submit_button("Deneme Sonucunu Veritabanına Kaydet", type="primary", use_container_width=True)
-                    
-                    if lgs_submit and deneme_adi:
-                        if (turkce_d + turkce_y > 20) or (mat_d + mat_y > 20) or (fen_d + fen_y > 20) or (ink_d + ink_y > 10) or (din_d + din_y > 10) or (ing_d + ing_y > 10):
-                            st.error("Girdiğiniz doğru ve yanlış sayıları toplamı, ilgili dersin toplam soru sayısını aşamaz!")
-                        else:
-                            kayit_verisi = {
-                                "ogrenci_id": secilen_ogr_id,
+                        for index, row in duzenlenmis_lgs_df.iterrows():
+                            td, ty = int(row["Türkçe D"]), int(row["Türkçe Y"])
+                            md, my = int(row["Matematik D"]), int(row["Matematik Y"])
+                            fd, fy = int(row["Fen D"]), int(row["Fen Y"])
+                            id_, iy = int(row["İnkılap D"]), int(row["İnkılap Y"])
+                            dd, dy = int(row["Din D"]), int(row["Din Y"])
+                            ingd, ingy = int(row["İngilizce D"]), int(row["İngilizce Y"])
+                            
+                            # Satır bazlı soru sayısı limit kontrolü
+                            if (td + ty > 20) or (md + my > 20) or (fd + fy > 20) or (id_ + iy > 10) or (dd + dy > 10) or (ingd + ingy > 10):
+                                st.error(f"❌ {row['Öğrenci Adı']} için girilen Doğru + Yanlış sayıları ilgili dersin soru limitlerini aşıyor! Kayıt işlemi durduruldu.")
+                                hata_var_mi = True
+                                break
+                            
+                            toplu_kayit_listesi.append({
+                                "ogrenci_id": int(row["Öğrenci ID"]),
                                 "deneme_adi": deneme_adi,
-                                "turkce_d": turkce_d, "turkce_y": turkce_y,
-                                "mat_d": mat_d, "mat_y": mat_y,
-                                "fen_d": fen_d, "fen_y": fen_y,
-                                "ink_d": ink_d, "ink_y": ink_y,
-                                "din_d": din_d, "din_y": din_y,
-                                "ing_d": ing_d, "ing_y": ing_y
-                            }
-                            supabase.table("lgs_denemeleri").insert(kayit_verisi).execute()
-                            st.success(f"{secilen_ogr_lgs} için {deneme_adi} verileri başarıyla kaydedildi.")
+                                "turkce_d": td, "turkce_y": ty,
+                                "mat_d": md, "mat_y": my,
+                                "fen_d": fd, "fen_y": fy,
+                                "ink_d": id_, "ink_y": iy,
+                                "din_d": dd, "din_y": dy,
+                                "ing_d": ingd, "ing_y": ingy
+                            })
+                        
+                        if not hata_var_mi and toplu_kayit_listesi:
+                            supabase.table("lgs_denemeleri").insert(toplu_kayit_listesi).execute()
+                            st.success(f"✔️ {secilen_sinif_lgs} sınıfına ait '{deneme_adi}' toplu sınav sonuçları veri tabanına başarıyla işlendi.")
                             st.rerun()
 
             with tab_lgs2:
@@ -738,7 +763,6 @@ elif menu == "LGS Takip":
                 else:
                     df_lgs = pd.DataFrame(lgs_res.data)
                     
-                    # Net Formülleri (Doğru - Yanlış / 3)
                     df_lgs["Türkçe Net"] = df_lgs["turkce_d"] - (df_lgs["turkce_y"] / 3)
                     df_lgs["Matematik Net"] = df_lgs["mat_d"] - (df_lgs["mat_y"] / 3)
                     df_lgs["Fen Net"] = df_lgs["fen_d"] - (df_lgs["fen_y"] / 3)
@@ -792,7 +816,7 @@ elif menu == "🛠️ Test Verisi Üret":
                         "proje": random.randint(70, 100)
                     })
                 if sinif == "8-A":
-                    for i in range(1, 9): # 8 adet deneme sınavı simüle ediliyor
+                    for i in range(1, 9): 
                         lgs_data.append({
                             "ogrenci_id": ogr_id,
                             "deneme_adi": f"Deneme {i}",
