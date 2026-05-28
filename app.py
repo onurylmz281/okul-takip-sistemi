@@ -125,7 +125,8 @@ elif menu == "Öğrenci Profil Paneli":
             # --- ÖDEV VERİLERİ VE DİNAMİK FİLTRELEME ---
             odevler_res = supabase.table("odev_teslimleri").select("*").eq("ogrenci_id", ogr_id).execute()
             odev_orani = 0
-            pdf_grafik_html = ""
+            genel_graph_base64 = ""
+            pdf_brans_grafikleri_html = ""
             df_html_odevler = ""
             
             if odevler_res.data:
@@ -164,16 +165,41 @@ elif menu == "Öğrenci Profil Paneli":
                 col_grafik, col_tablo = st.columns([5, 5])
                 
                 with col_grafik:
-                    st.write("**Ders Bazlı Ödev Teslim Dağılımları**")
                     if not df_filtered_odev.empty:
                         color_map = {"Yaptı": "#4CAF50", "Yarım": "#FFC107", "Yapmadı": "#F44336", "Gelmedi": "#9E9E9E"}
                         
-                        # Hangi branşların grafiği çizilecek belirleniyor
+                        # 1. Genel Dağılım Grafiği Üretimi
+                        st.write("**Genel Ödev Dağılımı (Filtrelenmiş Veri)**")
+                        status_counts_genel = df_filtered_odev["Durum"].value_counts()
+                        current_colors_genel = [color_map.get(idx_name, "#2196F3") for idx_name in status_counts_genel.index]
+                        
+                        fig_genel, ax_genel = plt.subplots(figsize=(3.5, 3.5))
+                        wedges, texts, autotexts = ax_genel.pie(
+                            status_counts_genel, 
+                            labels=status_counts_genel.index, 
+                            autopct='%1.1f%%', 
+                            startangle=90, 
+                            colors=current_colors_genel,
+                            wedgeprops=dict(width=0.4, edgecolor='w')
+                        )
+                        plt.setp(autotexts, size=8, weight="bold")
+                        plt.setp(texts, size=9)
+                        st.pyplot(fig_genel)
+                        
+                        buf_genel = io.BytesIO()
+                        plt.savefig(buf_genel, format='png', bbox_inches='tight', dpi=130)
+                        buf_genel.seek(0)
+                        genel_graph_base64 = base64.b64encode(buf_genel.read()).decode('utf-8')
+                        plt.close(fig_genel)
+                        
+                        st.divider()
+                        
+                        # 2. Ders Bazlı Dağılım Grafikleri Üretimi
+                        st.write("**Ders Bazlı Ödev Dağılımları**")
                         cizilecek_branslar = branslar if filtre_brans == "Tüm Dersler" else [filtre_brans]
                         aktif_branslar = [b for b in cizilecek_branslar if not df_filtered_odev[df_filtered_odev["Branş"] == b].empty]
                         
                         if aktif_branslar:
-                            # Streamlit ekranında yan yana ikişerli sütun yapısı
                             cols_ui = st.columns(2)
                             idx = 0
                             
@@ -195,23 +221,20 @@ elif menu == "Öğrenci Profil Paneli":
                                 plt.setp(texts, size=8)
                                 ax.set_title(f"{b}", fontsize=9, weight="bold", pad=5)
                                 
-                                # Arayüze basma
                                 with cols_ui[idx % 2]:
                                     st.pyplot(fig)
                                 
-                                # PDF için görsel verisine (Base64) dönüştürme
                                 buf = io.BytesIO()
                                 plt.savefig(buf, format='png', bbox_inches='tight', dpi=130)
                                 buf.seek(0)
                                 img_b64 = base64.b64encode(buf.read()).decode('utf-8')
                                 plt.close(fig)
                                 
-                                # HTML çıktı şablonuna ekleme (Yan yana hizalı div'ler)
-                                pdf_grafik_html += f'<div style="display: inline-block; width: 45%; margin: 2%; text-align: center; vertical-align: top;"><img src="data:image/png;base64,{img_b64}" style="width: 100%; max-width: 240px;"></div>'
+                                pdf_brans_grafikleri_html += f'<div style="display: inline-block; width: 45%; margin: 2%; text-align: center; vertical-align: top;"><img src="data:image/png;base64,{img_b64}" style="width: 100%; max-width: 240px;"></div>'
                                 
                                 idx += 1
                         else:
-                            st.warning("Seçilen kriterlere uygun aktif ödev grafiği üretilemedi.")
+                            st.warning("Ders bazlı analiz için veri bulunamadı.")
                     else:
                         st.warning("Seçilen kriterlere uygun ödev kaydı bulunamadığından grafik oluşturulamadı.")
                 
@@ -290,7 +313,7 @@ elif menu == "Öğrenci Profil Paneli":
                 .graph-container {{ text-align: center; margin-top: 15px; margin-bottom: 15px; width: 100%; }}
                 .lgs-container {{ text-align: center; margin-top: 20px; }}
                 .graph-img-lgs {{ max-width: 550px; height: auto; }}
-                .filter-info {{ font-size: 12px; color: #555; background: #eef1f6; padding: 8px; border-radius: 4px; display: inline-block; }}
+                .filter-info {{ font-size: 12px; color: #555; background: #eef1f6; padding: 8px; border-radius: 4px; display: inline-block; margin-bottom: 15px; }}
             </style>
             </head>
             <body onload="window.print()">
@@ -319,8 +342,10 @@ elif menu == "Öğrenci Profil Paneli":
                 <h3 class="section-title">📚 Ödev Durumu ve Takip Analizi</h3>
                 <div class="filter-info"><b>Uygulanan Rapor Filtreleri:</b> Ders: {filtre_brans} | Durum: {filtre_durum}</div>
                 
+                {f'<div class="graph-container"><h4>Genel Ödev Dağılımı</h4><img src="data:image/png;base64,{genel_graph_base64}" style="max-width: 320px;"></div>' if genel_graph_base64 else ""}
+                
                 <div class="graph-container">
-                    {pdf_grafik_html if pdf_grafik_html else "<p>Kriterlere uygun ödev grafiği bulunmuyor.</p>"}
+                    {pdf_brans_grafikleri_html if pdf_brans_grafikleri_html else ""}
                 </div>
                 
                 <div style="margin-top: 15px;">
@@ -345,8 +370,7 @@ elif menu == "Öğrenci Profil Paneli":
                 label="👤 Seçili Filtrelerle Profil Raporunu PDF İndir",
                 data=html_icerik,
                 file_name=f"{secilen_ogrenci}_Gelişim_Raporu.html",
-                mime="text/html",
-                help="İndirdiğiniz dökümanı açtığınızda grafikler otomatik olarak filtrelenmiş haliyle içeride hazır görünecektir."
+                mime="text/html"
             )
     else:
         st.warning("Bu sınıfta henüz kayıtlı öğrenci bulunmuyor.")
