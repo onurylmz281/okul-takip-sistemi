@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from supabase import create_client, Client
 from datetime import date, timedelta
 import matplotlib.pyplot as plt
@@ -201,7 +202,6 @@ elif menu == "Öğrenci Profil Paneli":
                         if aktif_branslar:
                             cols_ui = st.columns(2)
                             idx = 0
-                            
                             for b in aktif_branslar:
                                 df_b = df_filtered_odev[df_filtered_odev["Branş"] == b]
                                 status_counts = df_b["Durum"].value_counts()
@@ -209,12 +209,8 @@ elif menu == "Öğrenci Profil Paneli":
                                 
                                 fig, ax = plt.subplots(figsize=(2.8, 2.8))
                                 wedges, texts, autotexts = ax.pie(
-                                    status_counts, 
-                                    labels=status_counts.index, 
-                                    autopct='%1.1f%%', 
-                                    startangle=90, 
-                                    colors=current_colors,
-                                    wedgeprops=dict(width=0.4, edgecolor='w')
+                                    status_counts, labels=status_counts.index, autopct='%1.1f%%', 
+                                    startangle=90, colors=current_colors, wedgeprops=dict(width=0.4, edgecolor='w')
                                 )
                                 plt.setp(autotexts, size=7, weight="bold")
                                 plt.setp(texts, size=8)
@@ -228,9 +224,7 @@ elif menu == "Öğrenci Profil Paneli":
                                 buf.seek(0)
                                 img_b64 = base64.b64encode(buf.read()).decode('utf-8')
                                 plt.close(fig)
-                                
                                 pdf_brans_grafikleri_html += f'<div style="display: inline-block; width: 45%; margin: 2%; text-align: center; vertical-align: top;"><img src="data:image/png;base64,{img_b64}" style="width: 100%; max-width: 240px;"></div>'
-                                
                                 idx += 1
                         else:
                             st.warning("Ders bazlı analiz için veri bulunamadı.")
@@ -245,132 +239,10 @@ elif menu == "Öğrenci Profil Paneli":
                 st.info("Bu öğrenciye ait ödev değerlendirmesi bulunmamaktadır.")
 
             son_deneme_neti = 0
-            lgs_line_base64 = ""
-            lgs_res = None
-            if is_8th_grade:
-                lgs_res = supabase.table("lgs_denemeleri").select("*").eq("ogrenci_id", ogr_id).execute()
-                if lgs_res.data:
-                    son_deneme = lgs_res.data[-1] 
-                    t_net = son_deneme["turkce_d"] - (son_deneme["turkce_y"] / 3)
-                    m_net = son_deneme["mat_d"] - (son_deneme["mat_y"] / 3)
-                    f_net = son_deneme["fen_d"] - (son_deneme["fen_y"] / 3)
-                    i_net = son_deneme["ink_d"] - (son_deneme["ink_y"] / 3)
-                    d_net = son_deneme["din_d"] - (son_deneme["din_y"] / 3)
-                    in_net = son_deneme["ing_d"] - (son_deneme["ing_y"] / 3)
-                    son_deneme_neti = round(t_net + m_net + f_net + i_net + d_net + in_net, 2)
-                    
-                    st.divider()
-                    st.subheader("🎯 LGS Deneme Sınavları Gelişimi")
-                    
-                    grafik_verisi = []
-                    for d in lgs_res.data:
-                        toplam = (d["turkce_d"] - d["turkce_y"]/3) + (d["mat_d"] - d["mat_y"]/3) + (d["fen_d"] - d["fen_y"]/3) + (d["ink_d"] - d["ink_y"]/3) + (d["din_d"] - d["din_y"]/3) + (d["ing_d"] - d["ing_y"]/3)
-                        grafik_verisi.append({"Deneme": d["deneme_adi"], "Toplam Net": toplam})
-                        
-                    df_lgs_grafik = pd.DataFrame(grafik_verisi)
-                    st.line_chart(df_lgs_grafik.set_index("Deneme"))
-                    
-                    fig2, ax2 = plt.subplots(figsize=(5.5, 2.5))
-                    ax2.plot(df_lgs_grafik["Deneme"], df_lgs_grafik["Toplam Net"], marker='o', color='#2196F3', linewidth=2)
-                    ax2.set_ylabel('Toplam Net')
-                    ax2.grid(True, linestyle='--', alpha=0.5)
-                    plt.xticks(rotation=15, fontsize=8)
-                    buf2 = io.BytesIO()
-                    plt.savefig(buf2, format='png', bbox_inches='tight', dpi=150)
-                    buf2.seek(0)
-                    lgs_line_base64 = base64.b64encode(buf2.read()).decode('utf-8')
-                    plt.close(fig2)
-
             st.sidebar.markdown("---")
             st.sidebar.subheader("Öğrenci Genel Durumu")
             st.sidebar.metric("Genel Not Ortalaması", f"{genel_ortalama} / 100")
             st.sidebar.metric("Ödev Tamamlama Oranı", f"% {odev_orani}")
-            if is_8th_grade:
-                st.sidebar.metric("Son Deneme Neti", f"{son_deneme_neti} Net")
-
-            st.divider()
-            st.write("#### 💾 Bireysel Raporu Dışa Aktar")
-            
-            html_icerik = f"""
-            <html>
-            <head>
-            <meta charset="utf-8">
-            <title>{secilen_ogrenci} - Gelişim Raporu</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; margin: 30px; color: #333; }}
-                .header-table {{ width: 100%; border: none; margin-bottom: 20px; }}
-                .card-container {{ display: flex; justify-content: space-between; margin-bottom: 25px; gap: 15px; }}
-                .card {{ flex: 1; border: 1px solid #ddd; border-radius: 6px; padding: 15px; text-align: center; background-color: #fafafa; }}
-                .card h3 {{ margin: 0 0 10px 0; font-size: 13px; color: #666; }}
-                .card p {{ margin: 0; font-size: 18px; font-weight: bold; color: #111; }}
-                table {{ width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }}
-                th, td {{ border: 1px solid #ddd; padding: 10px; text-align: center; }}
-                th {{ background-color: #f4f6f8; font-weight: bold; }}
-                .section-title {{ margin-top: 30px; border-bottom: 2px solid #2196F3; padding-bottom: 5px; color: #111; }}
-                .graph-container {{ text-align: center; margin-top: 15px; margin-bottom: 15px; width: 100%; }}
-                .lgs-container {{ text-align: center; margin-top: 20px; }}
-                .graph-img-lgs {{ max-width: 550px; height: auto; }}
-                .filter-info {{ font-size: 12px; color: #555; background: #eef1f6; padding: 8px; border-radius: 4px; display: inline-block; margin-bottom: 15px; }}
-            </style>
-            </head>
-            <body onload="window.print()">
-                <table class="header-table">
-                    <tr>
-                        <td style="text-align: left; border: none; font-size: 22px; font-weight: bold;">{secilen_ogrenci} - Bireysel Gelişim Raporu</td>
-                        <td style="text-align: right; border: none; color: #666;"><b>Sınıf:</b> {secilen_sinif} | <b>Tarih:</b> {date.today().strftime('%d.%m.%Y')}</td>
-                    </tr>
-                </table>
-                
-                <div class="card-container">
-                    <div class="card">
-                        <h3>Genel Not Ortalaması</h3>
-                        <p>{genel_ortalama} / 100</p>
-                    </div>
-                    <div class="card">
-                        <h3>Ödev Tamamlama Oranı (Genel)</h3>
-                        <p>% {odev_orani}</p>
-                    </div>
-                    {"<div class='card'><h3>Son LGS Deneme Neti</h3><p>" + str(son_deneme_neti) + " Net</p></div>" if is_8th_grade else ""}
-                </div>
-
-                <h3 class="section-title">📊 Ders Notları Detayları</h3>
-                {df_html_notlar if df_html_notlar else "<p>Kayıtlı not verisi bulunmuyor.</p>"}
-
-                <h3 class="section-title">📚 Ödev Durumu ve Takip Analizi</h3>
-                <div class="filter-info"><b>Uygulanan Rapor Filtreleri:</b> Ders: {filtre_brans} | Durum: {filtre_durum}</div>
-                
-                {f'<div class="graph-container"><h4>Genel Ödev Dağılımı</h4><img src="data:image/png;base64,{genel_graph_base64}" style="max-width: 320px;"></div>' if genel_graph_base64 else ""}
-                
-                <div class="graph-container">
-                    {pdf_brans_grafikleri_html if pdf_brans_grafikleri_html else ""}
-                </div>
-                
-                <div style="margin-top: 15px;">
-                    {df_html_odevler if df_html_odevler else "<p>Seçilen kriterlere uygun ödev verisi bulunmuyor.</p>"}
-                </div>
-            """
-            
-            if is_8th_grade and lgs_line_base64:
-                html_icerik += f"""
-                <h3 class="section-title">🎯 LGS Akademik Net Gelişim Grafiği</h3>
-                <div class="lgs-container">
-                    <img class="graph-img-lgs" src="data:image/png;base64,{lgs_line_base64}">
-                </div>
-                """
-                
-            html_icerik += """
-            </body>
-            </html>
-            """
-            
-            st.download_button(
-                label="👤 Seçili Filtrelerle Profil Raporunu PDF İndir",
-                data=html_icerik,
-                file_name=f"{secilen_ogrenci}_Gelişim_Raporu.html",
-                mime="text/html"
-            )
-    else:
-        st.warning("Bu sınıfta henüz kayıtlı öğrenci bulunmuyor.")
 
 elif menu == "Not Takip":
     st.header(f"Not Takip Paneli - {secilen_brans}")
@@ -391,7 +263,6 @@ elif menu == "Not Takip":
         for ogr in ogrenciler:
             ogr_id = ogr["id"]
             not_datasi = mevcut_notlar.get(ogr_id, {})
-            
             tablo_verisi.append({
                 "Kayıt ID": not_datasi.get("id", None),
                 "Öğrenci ID": ogr_id,
@@ -414,7 +285,7 @@ elif menu == "Not Takip":
 
         df["Ortalama"] = df.apply(ortalama_hesapla, axis=1)
         
-        st.write("Aşağıdaki tablo üzerinden not girişlerini yapabilirsiniz. Sayfadan ayrılmadan önce kaydetmeyi unutmayın.")
+        st.write("Aşağıdaki tablo üzerinden notları değiştirebilir veya silebilirsiniz. Yapılan değişiklikler **Notları Veri Tabanına Kaydet** butonuna basıldığında geçmiş verilerin üzerine yazılır (Update).")
         
         duzenlenmis_df = st.data_editor(
             df,
@@ -428,7 +299,7 @@ elif menu == "Not Takip":
             use_container_width=True
         )
         
-        if st.button("Notları Veri Tabanına Kaydet", type="primary"):
+        if st.button("Notları Veri Tabanına Kaydet (Ekle/Güncelle)", type="primary"):
             for index, row in duzenlenmis_df.iterrows():
                 kayit_verisi = {
                     "ogrenci_id": int(row["Öğrenci ID"]),
@@ -443,16 +314,19 @@ elif menu == "Not Takip":
                 not_var_mi = any(v is not None for k, v in kayit_verisi.items() if k not in ["ogrenci_id", "brans"])
                 
                 if pd.notnull(row["Kayıt ID"]):
-                    supabase.table("notlar").update(kayit_verisi).eq("id", int(row["Kayıt ID"])).execute()
+                    if not_var_mi:
+                        supabase.table("notlar").update(kayit_verisi).eq("id", int(row["Kayıt ID"])).execute()
+                    else:
+                        supabase.table("notlar").delete().eq("id", int(row["Kayıt ID"])).execute()
                 elif not_var_mi:
                     supabase.table("notlar").insert(kayit_verisi).execute()
             
-            st.success("Notlar başarıyla kaydedildi.")
+            st.success("Not işlemleri (Kayıt/Güncelleme/Silme) başarıyla tamamlandı.")
             st.rerun()
 
 elif menu == "Ödev Takip":
     st.header(f"Ödev Takip Modülü - {secilen_brans}")
-    tab1, tab2, tab3 = st.tabs(["📝 Yeni Ödev Tanımla", "✅ Ödev Kontrolü", "📊 Ödev Raporları"])
+    tab1, tab2, tab3 = st.tabs(["📝 Yeni Ödev Tanımla", "✅ Ödev Düzenle / Değerlendir", "📊 Ödev Raporları"])
     
     with tab1:
         secilen_sinif_odev = st.selectbox("Sınıf Seçin", sinif_listesi, key="odev_sinif_tanimla")
@@ -482,8 +356,16 @@ elif menu == "Ödev Takip":
             st.info("Bu sınıfa ve branşa ait tanımlanmış bir ödev bulunmamaktadır.")
         else:
             odev_secenekleri = {f"{o['odev_adi']} (Teslim: {o['teslim_tarihi']})": o['id'] for o in odevler_res.data}
-            secilen_odev_etiketi = st.selectbox("Kontrol Edilecek Ödevi Seçin", list(odev_secenekleri.keys()))
+            secilen_odev_etiketi = st.selectbox("Kontrol Edilecek / Düzenlenecek Ödevi Seçin", list(odev_secenekleri.keys()))
             secilen_odev_id = odev_secenekleri[secilen_odev_etiketi]
+            
+            col_d1, col_d2 = st.columns([4, 1])
+            with col_d2:
+                if st.button("🗑️ Bu Ödevi Tamamen Sil"):
+                    supabase.table("odev_teslimleri").delete().eq("odev_id", secilen_odev_id).execute()
+                    supabase.table("odevler").delete().eq("id", secilen_odev_id).execute()
+                    st.success("Ödev ve tüm değerlendirmeler veri tabanından silindi.")
+                    st.rerun()
             
             ogrenciler_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif_kontrol).execute()
             
@@ -509,6 +391,7 @@ elif menu == "Ödev Takip":
                     })
                     
                 df_odev = pd.DataFrame(tablo_verisi)
+                st.write("Aşağıdaki tablodan eski değerlendirmeleri doğrudan güncelleyebilirsiniz.")
                 
                 duzenlenmis_df = st.data_editor(
                     df_odev,
@@ -527,7 +410,7 @@ elif menu == "Ödev Takip":
                     use_container_width=True
                 )
                 
-                if st.button("Ödev Durumlarını Kaydet", type="primary"):
+                if st.button("Değişiklikleri Veri Tabanına Kaydet", type="primary"):
                     for index, row in duzenlenmis_df.iterrows():
                         durum = row["Durum"]
                         not_metni = str(row["Öğretmen Notu"]).strip() if pd.notnull(row["Öğretmen Notu"]) else ""
@@ -544,8 +427,10 @@ elif menu == "Ödev Takip":
                                 supabase.table("odev_teslimleri").update({"durum": durum, "ogretmen_notu": not_metni}).eq("id", int(row["Kayıt ID"])).execute()
                             else:
                                 supabase.table("odev_teslimleri").insert(kayit_verisi).execute()
+                        elif pd.notnull(row["Kayıt ID"]) and durum == "Değerlendirilmedi":
+                            supabase.table("odev_teslimleri").delete().eq("id", int(row["Kayıt ID"])).execute()
                     
-                    st.success("Ödev kontrolleri başarıyla kaydedildi.")
+                    st.success("Ödev güncellemeleri başarıyla kaydedildi.")
                     st.rerun()
 
     with tab3:
@@ -584,7 +469,6 @@ elif menu == "Ödev Takip":
                 ogr_ids = [o["id"] for o in ogrenciler]
                 
                 tsl_res = supabase.table("odev_teslimleri").select("ogrenci_id, odev_id, durum").in_("odev_id", odev_ids).in_("ogrenci_id", ogr_ids).execute()
-                
                 odev_map = {o["id"]: f"{o['odev_adi']} ({o['brans']})" for o in odevler}
                 
                 matris_veri = []
@@ -606,51 +490,14 @@ elif menu == "Ödev Takip":
                 st.write(f"**{secilen_sinif_rapor} Sınıfı Ödev Takip Çizelgesi**")
                 st.dataframe(df_matris, use_container_width=True)
                 
-                st.divider()
-                st.write("#### 💾 Raporu Dışa Aktar")
-                
                 col_btn1, col_btn2 = st.columns(2)
-                
                 html_tablo = df_matris.to_html(border=1, justify='center')
-                html_icerik_rapor = f"""
-                <html>
-                <head>
-                <meta charset="utf-8">
-                <title>{secilen_sinif_rapor} Ödev Raporu</title>
-                <style>
-                    body {{ font-family: Arial, sans-serif; margin: 40px; }}
-                    h2 {{ text-align: center; color: #333; }}
-                    table {{ width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }}
-                    th, td {{ border: 1px solid #ddd; padding: 12px; text-align: left; }}
-                    th {{ background-color: #f4f6f8; color: #333; }}
-                    tr:nth-child(even) {{ background-color: #fafafa; }}
-                </style>
-                </head>
-                <body onload="window.print()">
-                    <h2>{secilen_sinif_rapor} Sınıfı Ödev Takip Çizelgesi</h2>
-                    <p><b>Tarih Aralığı:</b> {baslangic_tarihi} - {bitis_tarihi}</p>
-                    {html_tablo}
-                </body>
-                </html>
-                """
+                html_icerik_rapor = f"<html><head><meta charset='utf-8'><title>{secilen_sinif_rapor} Ödev Raporu</title></head><body onload='window.print()'><h2>{secilen_sinif_rapor} Sınıfı Ödev Takip Çizelgesi</h2>{html_tablo}</body></html>"
                 
                 with col_btn1:
-                    st.download_button(
-                        label="📄 PDF Olarak Kaydet (Yazdırılabilir Form)",
-                        data=html_icerik_rapor,
-                        file_name=f"{secilen_sinif_rapor}_Odev_Raporu.html",
-                        mime="text/html"
-                    )
-                
-                csv = df_matris.to_csv(index=True, sep=";", encoding="utf-8-sig").encode("utf-8-sig")
-                
+                    st.download_button(label="📄 PDF Olarak Kaydet", data=html_icerik_rapor, file_name=f"{secilen_sinif_rapor}_Odev_Raporu.html", mime="text/html")
                 with col_btn2:
-                    st.download_button(
-                        label="📊 Excel İçin İndir",
-                        data=csv,
-                        file_name=f"{secilen_sinif_rapor}_Odev_Raporu.csv",
-                        mime="text/csv"
-                    )
+                    st.download_button(label="📊 Excel İçin İndir", data=df_matris.to_csv(index=True, sep=";", encoding="utf-8-sig").encode("utf-8-sig"), file_name=f"{secilen_sinif_rapor}_Odev_Raporu.csv", mime="text/csv")
 
 elif menu == "LGS Takip":
     st.header("LGS Takip Modülü")
@@ -658,111 +505,175 @@ elif menu == "LGS Takip":
     sinif_8_listesi = [s for s in sinif_listesi if s.startswith("8")]
     
     if not sinif_8_listesi:
-        st.info("Sistemde kayıtlı 8. sınıf bulunmamaktadır. Bu modül şu anlık sadece 8. sınıflar için aktiftir.")
+        st.info("Sistemde kayıtlı 8. sınıf bulunmamaktadır.")
     else:
         secilen_sinif_lgs = st.selectbox("Sınıf Seçin", sinif_8_listesi, key="lgs_sinif_secim")
-        
         ogrenciler_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif_lgs).execute()
         
         if not ogrenciler_res.data:
-            st.warning("Bu sınıfta henüz kayıtlı öğrenci bulunmuyor. Lütfen Öğrenci Yönetimi modülünden öğrenci ekleyin.")
+            st.warning("Bu sınıfta öğrenci kaydı bulunmuyor.")
         else:
             ogrenciler = ogrenciler_res.data
             ogr_secenekleri = {ogr["ad_soyad"]: ogr["id"] for ogr in ogrenciler}
+            ogr_idler = [ogr["id"] for ogr in ogrenciler]
             
-            tab_lgs1, tab_lgs2 = st.tabs(["📝 Deneme Notu Girişi", "📊 Başarı ve Gelişim Analizi"])
+            tab_lgs1, tab_lgs2, tab_lgs3 = st.tabs(["📝 Deneme Notu İşlem Paneli", "📊 Sınıf Genel Sıralaması", "🎯 Öğrenci Özel Analizi"])
             
+            # --- TAB 1: DENEME GİRİŞ / DÜZENLEME ---
             with tab_lgs1:
-                deneme_adi = st.text_input("Deneme Sınavı Adı (Örn: Özdebir 1, TÖDER, Kurumsal-1)")
+                islem_tipi = st.radio("İşlem Tipi Seçin:", ["➕ Yeni Deneme Girişi Yap", "✏️ Mevcut Denemeyi Düzenle / Sil"], horizontal=True)
                 
-                # Sınıftaki tüm öğrenciler için varsayılan matris verisi üretimi
-                lgs_tablo_verisi = []
-                for ogr in ogrenciler:
-                    lgs_tablo_verisi.append({
-                        "Öğrenci ID": ogr["id"],
-                        "Öğrenci Adı": ogr["ad_soyad"],
-                        "Türkçe D": 0, "Türkçe Y": 0,
-                        "Matematik D": 0, "Matematik Y": 0,
-                        "Fen D": 0, "Fen Y": 0,
-                        "İnkılap D": 0, "İnkılap Y": 0,
-                        "Din D": 0, "Din Y": 0,
-                        "İngilizce D": 0, "İngilizce Y": 0
-                    })
+                if islem_tipi == "➕ Yeni Deneme Girişi Yap":
+                    deneme_adi = st.text_input("Yeni Deneme Sınavı Adı (Örn: Özdebir-1)")
+                    
+                    lgs_tablo_verisi = []
+                    for ogr in ogrenciler:
+                        lgs_tablo_verisi.append({
+                            "Öğrenci ID": ogr["id"], "Kayıt ID": None, "Öğrenci Adı": ogr["ad_soyad"],
+                            "Türkçe D": 0, "Türkçe Y": 0, "Matematik D": 0, "Matematik Y": 0,
+                            "Fen D": 0, "Fen Y": 0, "İnkılap D": 0, "İnkılap Y": 0,
+                            "Din D": 0, "Din Y": 0, "İngilizce D": 0, "İngilizce Y": 0
+                        })
+                    df_lgs_toplu = pd.DataFrame(lgs_tablo_verisi)
+                    st.write("Aşağıdaki tablo üzerinden klavyenizle hızlıca geçiş yaparak verileri işleyebilirsiniz.")
                 
-                df_lgs_toplu = pd.DataFrame(lgs_tablo_verisi)
-                
-                st.write("Aşağıdaki tabloya sınıftaki tüm öğrencilerin Doğru (D) ve Yanlış (Y) sayılarını toplu olarak girebilirsiniz. Hücreler arasında yön tuşları veya TAB tuşu ile klavyeden hızlıca geçiş yapabilirsiniz.")
-                
-                duzenlenmis_lgs_df = st.data_editor(
-                    df_lgs_toplu,
-                    column_config={
-                        "Öğrenci ID": None, # Kullanıcıdan gizli tutulur
-                        "Öğrenci Adı": st.column_config.TextColumn(disabled=True),
-                        "Türkçe D": st.column_config.NumberColumn(min_value=0, max_value=20, step=1, default=0),
-                        "Türkçe Y": st.column_config.NumberColumn(min_value=0, max_value=20, step=1, default=0),
-                        "Matematik D": st.column_config.NumberColumn(min_value=0, max_value=20, step=1, default=0),
-                        "Matematik Y": st.column_config.NumberColumn(min_value=0, max_value=20, step=1, default=0),
-                        "Fen D": st.column_config.NumberColumn(min_value=0, max_value=20, step=1, default=0),
-                        "Fen Y": st.column_config.NumberColumn(min_value=0, max_value=20, step=1, default=0),
-                        "İnkılap D": st.column_config.NumberColumn(min_value=0, max_value=10, step=1, default=0),
-                        "İnkılap Y": st.column_config.NumberColumn(min_value=0, max_value=10, step=1, default=0),
-                        "Din D": st.column_config.NumberColumn(min_value=0, max_value=10, step=1, default=0),
-                        "Din Y": st.column_config.NumberColumn(min_value=0, max_value=10, step=1, default=0),
-                        "İngilizce D": st.column_config.NumberColumn(min_value=0, max_value=10, step=1, default=0),
-                        "İngilizce Y": st.column_config.NumberColumn(min_value=0, max_value=10, step=1, default=0),
-                    },
-                    hide_index=True,
-                    use_container_width=True
-                )
-                
-                if st.button("Toplu Deneme Sonuçlarını Kaydet", type="primary", use_container_width=True):
-                    if not deneme_adi:
-                        st.error("Lütfen verileri kaydetmeden önce yukarıdaki alana deneme sınavı adını giriniz!")
-                    else:
-                        toplu_kayit_listesi = []
-                        hata_var_mi = False
+                else:
+                    mevcut_denemeler_res = supabase.table("lgs_denemeleri").select("deneme_adi").in_("ogrenci_id", ogr_idler).execute()
+                    if mevcut_denemeler_res.data:
+                        benzersiz_denemeler = list(set([d["deneme_adi"] for d in mevcut_denemeler_res.data]))
+                        deneme_adi = st.selectbox("Düzenlenecek Denemeyi Seçin", benzersiz_denemeler)
                         
-                        for index, row in duzenlenmis_lgs_df.iterrows():
-                            td, ty = int(row["Türkçe D"]), int(row["Türkçe Y"])
-                            md, my = int(row["Matematik D"]), int(row["Matematik Y"])
-                            fd, fy = int(row["Fen D"]), int(row["Fen Y"])
-                            id_, iy = int(row["İnkılap D"]), int(row["İnkılap Y"])
-                            dd, dy = int(row["Din D"]), int(row["Din Y"])
-                            ingd, ingy = int(row["İngilizce D"]), int(row["İngilizce Y"])
-                            
-                            # Satır bazlı soru sayısı limit kontrolü
-                            if (td + ty > 20) or (md + my > 20) or (fd + fy > 20) or (id_ + iy > 10) or (dd + dy > 10) or (ingd + ingy > 10):
-                                st.error(f"❌ {row['Öğrenci Adı']} için girilen Doğru + Yanlış sayıları ilgili dersin soru limitlerini aşıyor! Kayıt işlemi durduruldu.")
-                                hata_var_mi = True
-                                break
-                            
-                            toplu_kayit_listesi.append({
-                                "ogrenci_id": int(row["Öğrenci ID"]),
-                                "deneme_adi": deneme_adi,
-                                "turkce_d": td, "turkce_y": ty,
-                                "mat_d": md, "mat_y": my,
-                                "fen_d": fd, "fen_y": fy,
-                                "ink_d": id_, "ink_y": iy,
-                                "din_d": dd, "din_y": dy,
-                                "ing_d": ingd, "ing_y": ingy
+                        col_del1, col_del2 = st.columns([4, 1])
+                        with col_del2:
+                            if st.button("🗑️ Bu Sınavı Tamamen Sil"):
+                                supabase.table("lgs_denemeleri").delete().eq("deneme_adi", deneme_adi).in_("ogrenci_id", ogr_idler).execute()
+                                st.success("Sınav verileri başarıyla silindi.")
+                                st.rerun()
+                        
+                        # Mevcut deneme verilerini çek
+                        deneme_verileri_res = supabase.table("lgs_denemeleri").select("*").eq("deneme_adi", deneme_adi).in_("ogrenci_id", ogr_idler).execute()
+                        mevcut_veriler = {d["ogrenci_id"]: d for d in deneme_verileri_res.data}
+                        
+                        lgs_tablo_verisi = []
+                        for ogr in ogrenciler:
+                            d_veri = mevcut_veriler.get(ogr["id"], {})
+                            lgs_tablo_verisi.append({
+                                "Öğrenci ID": ogr["id"], "Kayıt ID": d_veri.get("id", None), "Öğrenci Adı": ogr["ad_soyad"],
+                                "Türkçe D": d_veri.get("turkce_d", 0), "Türkçe Y": d_veri.get("turkce_y", 0),
+                                "Matematik D": d_veri.get("mat_d", 0), "Matematik Y": d_veri.get("mat_y", 0),
+                                "Fen D": d_veri.get("fen_d", 0), "Fen Y": d_veri.get("fen_y", 0),
+                                "İnkılap D": d_veri.get("ink_d", 0), "İnkılap Y": d_veri.get("ink_y", 0),
+                                "Din D": d_veri.get("din_d", 0), "Din Y": d_veri.get("din_y", 0),
+                                "İngilizce D": d_veri.get("ing_d", 0), "İngilizce Y": d_veri.get("ing_y", 0)
                             })
-                        
-                        if not hata_var_mi and toplu_kayit_listesi:
-                            supabase.table("lgs_denemeleri").insert(toplu_kayit_listesi).execute()
-                            st.success(f"✔️ {secilen_sinif_lgs} sınıfına ait '{deneme_adi}' toplu sınav sonuçları veri tabanına başarıyla işlendi.")
-                            st.rerun()
+                        df_lgs_toplu = pd.DataFrame(lgs_tablo_verisi)
+                        st.write("Verileri doğrudan tablo üzerinden düzenleyebilirsiniz.")
+                    else:
+                        st.info("Bu sınıfa ait kaydedilmiş deneme verisi bulunmuyor.")
+                        df_lgs_toplu = pd.DataFrame()
+                        deneme_adi = ""
 
+                if not df_lgs_toplu.empty:
+                    duzenlenmis_lgs_df = st.data_editor(
+                        df_lgs_toplu,
+                        column_config={
+                            "Öğrenci ID": None, "Kayıt ID": None,
+                            "Öğrenci Adı": st.column_config.TextColumn(disabled=True),
+                            "Türkçe D": st.column_config.NumberColumn(min_value=0, max_value=20, step=1),
+                            "Türkçe Y": st.column_config.NumberColumn(min_value=0, max_value=20, step=1),
+                            "Matematik D": st.column_config.NumberColumn(min_value=0, max_value=20, step=1),
+                            "Matematik Y": st.column_config.NumberColumn(min_value=0, max_value=20, step=1),
+                            "Fen D": st.column_config.NumberColumn(min_value=0, max_value=20, step=1),
+                            "Fen Y": st.column_config.NumberColumn(min_value=0, max_value=20, step=1),
+                            "İnkılap D": st.column_config.NumberColumn(min_value=0, max_value=10, step=1),
+                            "İnkılap Y": st.column_config.NumberColumn(min_value=0, max_value=10, step=1),
+                            "Din D": st.column_config.NumberColumn(min_value=0, max_value=10, step=1),
+                            "Din Y": st.column_config.NumberColumn(min_value=0, max_value=10, step=1),
+                            "İngilizce D": st.column_config.NumberColumn(min_value=0, max_value=10, step=1),
+                            "İngilizce Y": st.column_config.NumberColumn(min_value=0, max_value=10, step=1),
+                        }, hide_index=True, use_container_width=True
+                    )
+                    
+                    if st.button("Tüm İşlemleri Veri Tabanına Kaydet", type="primary", use_container_width=True):
+                        if not deneme_adi:
+                            st.error("Deneme adı boş bırakılamaz!")
+                        else:
+                            hata_var_mi = False
+                            for index, row in duzenlenmis_lgs_df.iterrows():
+                                if (row["Türkçe D"]+row["Türkçe Y"]>20) or (row["Matematik D"]+row["Matematik Y"]>20) or (row["Fen D"]+row["Fen Y"]>20) or (row["İnkılap D"]+row["İnkılap Y"]>10) or (row["Din D"]+row["Din Y"]>10) or (row["İngilizce D"]+row["İngilizce Y"]>10):
+                                    st.error(f"❌ {row['Öğrenci Adı']} için soru limiti aşıldı! İşlem durduruldu.")
+                                    hata_var_mi = True
+                                    break
+                            
+                            if not hata_var_mi:
+                                for index, row in duzenlenmis_lgs_df.iterrows():
+                                    kayit_paketi = {
+                                        "ogrenci_id": int(row["Öğrenci ID"]), "deneme_adi": deneme_adi,
+                                        "turkce_d": int(row["Türkçe D"]), "turkce_y": int(row["Türkçe Y"]),
+                                        "mat_d": int(row["Matematik D"]), "mat_y": int(row["Matematik Y"]),
+                                        "fen_d": int(row["Fen D"]), "fen_y": int(row["Fen Y"]),
+                                        "ink_d": int(row["İnkılap D"]), "ink_y": int(row["İnkılap Y"]),
+                                        "din_d": int(row["Din D"]), "din_y": int(row["Din Y"]),
+                                        "ing_d": int(row["İngilizce D"]), "ing_y": int(row["İngilizce Y"])
+                                    }
+                                    k_id = row.get("Kayıt ID")
+                                    # Herhangi bir veri girilmişse ekle veya güncelle
+                                    if sum([kayit_paketi[k] for k in kayit_paketi if k not in ["ogrenci_id", "deneme_adi"]]) > 0:
+                                        if pd.notnull(k_id):
+                                            supabase.table("lgs_denemeleri").update(kayit_paketi).eq("id", int(k_id)).execute()
+                                        else:
+                                            supabase.table("lgs_denemeleri").insert(kayit_paketi).execute()
+                                    elif pd.notnull(k_id): # Veri sıfırlandıysa sil
+                                        supabase.table("lgs_denemeleri").delete().eq("id", int(k_id)).execute()
+                                
+                                st.success("Sınav işlemleri başarıyla tamamlandı.")
+                                st.rerun()
+
+            # --- TAB 2: SINIF GENEL SIRALAMASI ---
             with tab_lgs2:
+                mevcut_denemeler_res = supabase.table("lgs_denemeleri").select("deneme_adi").in_("ogrenci_id", ogr_idler).execute()
+                if mevcut_denemeler_res.data:
+                    benzersiz_denemeler = list(set([d["deneme_adi"] for d in mevcut_denemeler_res.data]))
+                    secili_deneme_analiz = st.selectbox("Analiz Edilecek Denemeyi Seçin", benzersiz_denemeler)
+                    
+                    s_veri_res = supabase.table("lgs_denemeleri").select("*").eq("deneme_adi", secili_deneme_analiz).in_("ogrenci_id", ogr_idler).execute()
+                    
+                    if s_veri_res.data:
+                        df_s = pd.DataFrame(s_veri_res.data)
+                        df_s["Öğrenci"] = df_s["ogrenci_id"].apply(lambda x: next((ogr["ad_soyad"] for ogr in ogrenciler if ogr["id"] == x), "Bilinmiyor"))
+                        
+                        df_s["Türkçe Net"] = df_s["turkce_d"] - (df_s["turkce_y"] / 3)
+                        df_s["Matematik Net"] = df_s["mat_d"] - (df_s["mat_y"] / 3)
+                        df_s["Fen Net"] = df_s["fen_d"] - (df_s["fen_y"] / 3)
+                        df_s["İnkılap Net"] = df_s["ink_d"] - (df_s["ink_y"] / 3)
+                        df_s["Din Net"] = df_s["din_d"] - (df_s["din_y"] / 3)
+                        df_s["İngilizce Net"] = df_s["ing_d"] - (df_s["ing_y"] / 3)
+                        
+                        df_s["Toplam Net"] = df_s[["Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net"]].sum(axis=1)
+                        
+                        # Sıralama
+                        df_s = df_s.sort_values(by="Toplam Net", ascending=False).reset_index(drop=True)
+                        df_s.index += 1
+                        df_s = df_s.reset_index().rename(columns={"index": "Sınıf Derecesi"})
+                        
+                        tablo_s = df_s[["Sınıf Derecesi", "Öğrenci", "Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net", "Toplam Net"]]
+                        
+                        st.subheader(f"🏆 {secili_deneme_analiz} - Sınıf Başarı Sıralaması")
+                        st.dataframe(tablo_s, hide_index=True, use_container_width=True)
+                else:
+                    st.info("Sınıf sıralaması oluşturulacak herhangi bir deneme verisi bulunmuyor.")
+
+            # --- TAB 3: ÖĞRENCİ ÖZEL ANALİZİ ---
+            with tab_lgs3:
                 secilen_ogr_analiz = st.selectbox("Öğrenci Seçin", list(ogr_secenekleri.keys()), key="lgs_ogr_secim_analiz")
                 secilen_ogr_id_analiz = ogr_secenekleri[secilen_ogr_analiz]
                 
                 lgs_res = supabase.table("lgs_denemeleri").select("*").eq("ogrenci_id", secilen_ogr_id_analiz).execute()
                 
                 if not lgs_res.data:
-                    st.info("Bu öğrenciye ait henüz LGS deneme sınavı verisi bulunmamaktadır.")
+                    st.info("Bu öğrenciye ait LGS analizi oluşturulacak veri bulunmamaktadır.")
                 else:
                     df_lgs = pd.DataFrame(lgs_res.data)
-                    
                     df_lgs["Türkçe Net"] = df_lgs["turkce_d"] - (df_lgs["turkce_y"] / 3)
                     df_lgs["Matematik Net"] = df_lgs["mat_d"] - (df_lgs["mat_y"] / 3)
                     df_lgs["Fen Net"] = df_lgs["fen_d"] - (df_lgs["fen_y"] / 3)
@@ -770,19 +681,45 @@ elif menu == "LGS Takip":
                     df_lgs["Din Net"] = df_lgs["din_d"] - (df_lgs["din_y"] / 3)
                     df_lgs["İngilizce Net"] = df_lgs["ing_d"] - (df_lgs["ing_y"] / 3)
                     
-                    df_lgs["Toplam Net"] = df_lgs["Türkçe Net"] + df_lgs["Matematik Net"] + df_lgs["Fen Net"] + df_lgs["İnkılap Net"] + df_lgs["Din Net"] + df_lgs["İngilizce Net"]
+                    df_lgs["Toplam Net"] = df_lgs[["Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net"]].sum(axis=1)
                     
-                    st.write("### 📈 Toplam Net Gelişim Grafiği")
-                    df_grafik_tot = df_lgs[["deneme_adi", "Toplam Net"]].set_index("deneme_adi")
+                    # MEB Benzeri Tahmini LGS Puanı (Katsayı Oranlarına Göre Yaklaşık Formül: T,M,F=4.2; İ,D,İ=1.6; Taban=200, Max=500)
+                    df_lgs["Tahmini Puan"] = 200 + (df_lgs["Türkçe Net"]*4.2) + (df_lgs["Matematik Net"]*4.2) + (df_lgs["Fen Net"]*4.2) + (df_lgs["İnkılap Net"]*1.6) + (df_lgs["Din Net"]*1.6) + (df_lgs["İngilizce Net"]*1.6)
+                    df_lgs["Tahmini Puan"] = df_lgs["Tahmini Puan"].round(2)
+                    
+                    son_deneme_verisi = df_lgs.iloc[-1]
+                    
+                    col_m1, col_m2, col_m3 = st.columns(3)
+                    col_m1.metric("Mevcut Toplam Net", f"{son_deneme_verisi['Toplam Net']:.2f} Net")
+                    col_m2.metric("Tahmini LGS Puanı", f"{son_deneme_verisi['Tahmini Puan']} Puan")
+                    
+                    # İvme Hesaplama (Son 2 sınav farkı)
+                    if len(df_lgs) > 1:
+                        ivme = df_lgs.iloc[-1]["Toplam Net"] - df_lgs.iloc[-2]["Toplam Net"]
+                        if ivme > 0:
+                            col_m3.metric("Son Sınav İvmesi", f"+{ivme:.2f} Net", "Artış Trendi")
+                        else:
+                            col_m3.metric("Son Sınav İvmesi", f"{ivme:.2f} Net", "-Düşüş Trendi", delta_color="inverse")
+                    else:
+                        col_m3.metric("Son Sınav İvmesi", "Veri Yetersiz")
+                    
+                    st.divider()
+                    
+                    # Dalgalanma & Güçlü Alan Analizi (Standart Sapma ve Ortalama)
+                    ders_netleri = ["Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net"]
+                    std_devs = df_lgs[ders_netleri].std()
+                    ortalamalar = df_lgs[ders_netleri].mean()
+                    
+                    guclu_ders = ortalamalar.idxmax().replace(" Net", "")
+                    en_dalgalan_ders = std_devs.idxmax().replace(" Net", "")
+                    
+                    st.write("#### 🔍 Gelişmiş Risk ve Potansiyel Analizi")
+                    st.write(f"- **💪 En İstikrarlı ve Güçlü Ders:** :green[{guclu_ders}]")
+                    st.write(f"- **⚠️ Sınav Kaygısı / Dalgalanma Riski Yüksek Ders:** :red[{en_dalgalan_ders}] (Net standardı sürekli değişiyor, öğrencinin bilgi kalıcılığı kontrol edilmeli.)")
+                    
+                    st.write("#### 📈 LGS Puan ve Net Gelişim Grafiği")
+                    df_grafik_tot = df_lgs[["deneme_adi", "Toplam Net", "Tahmini Puan"]].set_index("deneme_adi")
                     st.line_chart(df_grafik_tot, use_container_width=True)
-                    
-                    st.write("### 📊 Ders Bazlı Net Gelişimi")
-                    df_grafik_dersler = df_lgs[["deneme_adi", "Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net"]].set_index("deneme_adi")
-                    st.line_chart(df_grafik_dersler, use_container_width=True)
-                    
-                    st.write("### 📋 Deneme Sonuçları Detay Tablosu")
-                    df_tablo_gosterim = df_lgs[["deneme_adi", "Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net", "Toplam Net"]].rename(columns={"deneme_adi": "Deneme Sınavı"})
-                    st.dataframe(df_tablo_gosterim, hide_index=True, use_container_width=True)
 
 elif menu == "🛠️ Test Verisi Üret":
     st.header("Sisteme Rastgele Test Verisi Ekleme")
@@ -816,13 +753,14 @@ elif menu == "🛠️ Test Verisi Üret":
                         "proje": random.randint(70, 100)
                     })
                 if sinif == "8-A":
+                    # Trendi simüle etmek için artan zorluklar
                     for i in range(1, 9): 
                         lgs_data.append({
                             "ogrenci_id": ogr_id,
                             "deneme_adi": f"Deneme {i}",
-                            "turkce_d": random.randint(12, 20), "turkce_y": random.randint(0, 5),
-                            "mat_d": random.randint(6, 20), "mat_y": random.randint(0, 8),
-                            "fen_d": random.randint(12, 20), "fen_y": random.randint(0, 5),
+                            "turkce_d": random.randint(12, 19), "turkce_y": random.randint(0, 5),
+                            "mat_d": random.randint(6, 15), "mat_y": random.randint(0, 8),
+                            "fen_d": random.randint(12, 18), "fen_y": random.randint(0, 5),
                             "ink_d": random.randint(6, 10), "ink_y": random.randint(0, 3),
                             "din_d": random.randint(7, 10), "din_y": random.randint(0, 2),
                             "ing_d": random.randint(6, 10), "ing_y": random.randint(0, 3)
