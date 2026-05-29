@@ -9,18 +9,58 @@ import base64
 import random
 import os
 
-# Sayfa Ayarları (Streamlit'te her zaman en üstte olmalıdır)
-st.set_page_config(page_title="Sadiye ve Abdullah Tan Ortaokulu", page_icon="🎓", layout="wide")
+# --- 1. SAYFA VE LOGO AYARLARI ---
+st.set_page_config(
+    page_title="Sadiye ve Abdullah Tan Ortaokulu Takip Paneli", 
+    page_icon="🎓", 
+    layout="wide"
+)
 
-# --- OTURUM (LOGIN) YÖNETİMİ VE KARŞILAMA EKRANI ---
+# --- 2. SUPABASE BAĞLANTISI ---
+@st.cache_resource
+def init_connection():
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+supabase: Client = init_connection()
+
+# --- 3. SABİTLER VE YARDIMCI FONKSİYONLAR ---
+branslar = ["Matematik", "Türkçe", "Fen Bilimleri", "Sosyal Bilgiler", "İngilizce", "Din Kültürü", "İnkılap Tarihi"]
+sinif_listesi = ["5-A", "6-A", "7-A", "8-A"]
+
+# Rol ve Kullanıcı Veritabanı (RBAC)
+KULLANICILAR = {
+    "admin": {"sifre": "123456", "rol": "admin", "brans": "Tümü"},
+    "matematik": {"sifre": "123456", "rol": "ogretmen", "brans": "Matematik"},
+    "turkce": {"sifre": "123456", "rol": "ogretmen", "brans": "Türkçe"},
+    "fen": {"sifre": "123456", "rol": "ogretmen", "brans": "Fen Bilimleri"},
+    "sosyal": {"sifre": "123456", "rol": "ogretmen", "brans": "Sosyal Bilgiler"},
+    "ingilizce": {"sifre": "123456", "rol": "ogretmen", "brans": "İngilizce"},
+    "din": {"sifre": "123456", "rol": "ogretmen", "brans": "Din Kültürü"},
+    "inkilap": {"sifre": "123456", "rol": "ogretmen", "brans": "İnkılap Tarihi"}
+}
+
+def get_base64_logo():
+    if os.path.exists("logo.png"):
+        with open("logo.png", "rb") as f:
+            data = f.read()
+            return base64.b64encode(data).decode('utf-8')
+    return ""
+
+pdf_logo_b64 = get_base64_logo()
+logo_html = f'<img src="data:image/png;base64,{pdf_logo_b64}" style="width: 70px; float: left; margin-right: 15px;">' if pdf_logo_b64 else ''
+
+# --- 4. OTURUM YÖNETİMİ ---
 if "giris_yapildi" not in st.session_state:
     st.session_state.giris_yapildi = False
+    st.session_state.rol = None
+    st.session_state.brans = None
 
+# --- 5. GİRİŞ EKRANI (WELCOME PAGE) ---
 if not st.session_state.giris_yapildi:
-    # Karşılama Alanı Konteyneri
     with st.container():
         col_logo, col_baslik = st.columns([1, 6])
-        
         with col_logo:
             if os.path.exists("logo.png"):
                 st.image("logo.png", width=120)
@@ -34,7 +74,7 @@ if not st.session_state.giris_yapildi:
             Bu panel, okul yönetim sürecini dijitalleştirerek öğretmen ve velilerimiz için veri odaklı 
             bir takip mekanizması sunar. Panel üzerinden aşağıdaki işlemleri gerçekleştirebilirsiniz:
             
-            * **Öğrenci Yönetimi:** Öğrenci kayıtlarını sınıf bazlı oluşturabilir ve toplu yönetebilirsiniz.
+            * **Öğrenci Yönetimi:** Öğrenci kayıtlarını sınıf bazlı oluşturabilir ve toplu yönetebilirsiniz (Sadece Yönetici).
             * **Akademik Takip:** Not girişlerini yapabilir, branş bazlı ortalamaları izleyebilir ve PDF profil raporları alabilirsiniz.
             * **Ödev Süreçleri:** Ödev tanımlayabilir, teslim durumlarını puanlayabilir ve detaylı istatistikler tutabilirsiniz.
             * **LGS Hazırlık (8. Sınıflar):** Deneme sınavı sonuçlarını girebilir, sınıf sıralamalarını görebilir ve sınavları 'Kafa Kafaya' analiz dökümleriyle kıyaslayabilirsiniz.
@@ -53,22 +93,16 @@ if not st.session_state.giris_yapildi:
             giris_butonu = st.form_submit_button("Sisteme Giriş Yap", use_container_width=True)
             
             if giris_butonu:
-                if k_adi == "admin" and sifre == "123456":
+                if k_adi in KULLANICILAR and KULLANICILAR[k_adi]["sifre"] == sifre:
                     st.session_state.giris_yapildi = True
+                    st.session_state.rol = KULLANICILAR[k_adi]["rol"]
+                    st.session_state.brans = KULLANICILAR[k_adi]["brans"]
                     st.rerun()
                 else:
                     st.error("❌ Hatalı kullanıcı adı veya şifre.")
     st.stop() 
 
-# --- GİRİŞ BAŞARILIYSA AŞAĞIDAKİ KODLAR ÇALIŞIR ---
-
-@st.cache_resource
-def init_connection():
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
-    return create_client(url, key)
-
-supabase: Client = init_connection()
+# --- 6. ANA UYGULAMA PANELİ ---
 
 # --- Üst Bar (Başlık + Sağ Üst Logo) ---
 top_col1, top_col2 = st.columns([8, 1])
@@ -78,22 +112,30 @@ with top_col2:
     if os.path.exists("logo.png"):
         st.image("logo.png", width=80)
 
-if st.sidebar.button("🚪 Çıkış Yap", use_container_width=True):
+# Sidebar
+if st.sidebar.button("🚪 Güvenli Çıkış", use_container_width=True):
     st.session_state.giris_yapildi = False
+    st.session_state.rol = None
+    st.session_state.brans = None
     st.rerun()
 
-st.sidebar.title("Sistem Ayarları")
-branslar = ["Matematik", "Türkçe", "Fen Bilimleri", "Sosyal Bilgiler", "İngilizce", "Din Kültürü", "İnkılap Tarihi"]
-secilen_brans = st.sidebar.selectbox("Branş Seçimi", branslar)
-
 st.sidebar.divider()
-menu = st.sidebar.radio("Modüller", ["Öğrenci Yönetimi", "Öğrenci Profil Paneli", "Not Takip", "Ödev Takip", "LGS Takip", "🛠️ Test Verisi Üret"])
 
-sinif_listesi = ["5-A", "6-A", "7-A", "8-A"]
+# Branş Kısıtlaması (Rol Bazlı)
+if st.session_state.rol == "admin":
+    secilen_brans = st.sidebar.selectbox("İşlem Yapılacak Branş", branslar)
+    moduller = ["Öğrenci Yönetimi", "Öğrenci Profil Paneli", "Not Takip", "Ödev Takip", "LGS Takip", "🛠️ Test Verisi Üret"]
+else:
+    st.sidebar.success(f"Aktif Branş: {st.session_state.brans}")
+    secilen_brans = st.session_state.brans
+    moduller = ["Öğrenci Profil Paneli", "Not Takip", "Ödev Takip", "LGS Takip"]
 
-# --- ÖĞRENCİ YÖNETİMİ ---
+menu = st.sidebar.radio("Modüller", moduller)
+
+
+# --- MODÜL 1: ÖĞRENCİ YÖNETİMİ (SADECE ADMİN) ---
 if menu == "Öğrenci Yönetimi":
-    st.header("Öğrenci Yönetimi")
+    st.header("👥 Öğrenci Yönetimi")
     
     tab_ekle, tab_sil = st.tabs(["➕ Öğrenci Ekle / Listele", "🗑️ Öğrenci Sil"])
     
@@ -142,9 +184,9 @@ if menu == "Öğrenci Yönetimi":
             else:
                 st.info("Silmek için lütfen listeden en az bir öğrenci seçin.")
 
-# --- ÖĞRENCİ PROFİL PANELİ ---
+# --- MODÜL 2: ÖĞRENCİ PROFİL PANELİ ---
 elif menu == "Öğrenci Profil Paneli":
-    st.header("Öğrenci Profil Paneli")
+    st.header("👤 Öğrenci Profil Paneli")
     secilen_sinif = st.selectbox("Sınıf Seçin", sinif_listesi, key="profil_sinif")
     is_8th_grade = secilen_sinif.startswith("8")
     
@@ -232,8 +274,6 @@ elif menu == "Öğrenci Profil Paneli":
                 with col_grafik:
                     if not df_filtered_odev.empty:
                         color_map = {"Yaptı": "#4CAF50", "Yarım": "#FFC107", "Yapmadı": "#F44336", "Gelmedi": "#9E9E9E"}
-                        
-                        st.write("**Genel Ödev Dağılımı (Filtrelenmiş Veri)**")
                         status_counts_genel = df_filtered_odev["Durum"].value_counts()
                         current_colors_genel = [color_map.get(idx_name, "#2196F3") for idx_name in status_counts_genel.index]
                         
@@ -244,6 +284,7 @@ elif menu == "Öğrenci Profil Paneli":
                         )
                         plt.setp(autotexts, size=8, weight="bold")
                         plt.setp(texts, size=9)
+                        st.write("**Genel Ödev Dağılımı**")
                         st.pyplot(fig_genel)
                         
                         buf_genel = io.BytesIO()
@@ -323,8 +364,9 @@ elif menu == "Öğrenci Profil Paneli":
             <title>Öğrenci Profil Raporu</title>
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 35px; color: #333; }}
-                .title {{ text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 5px; }}
-                .subtitle {{ text-align: center; font-size: 14px; color: #555; margin-bottom: 25px; }}
+                .title-container {{ margin-bottom: 30px; overflow: hidden; }}
+                .title {{ text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 5px; margin-top: 10px; }}
+                .subtitle {{ text-align: center; font-size: 14px; color: #555; }}
                 .kv-table {{ width: 100%; border: none; margin-bottom: 20px; }}
                 table {{ width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }}
                 th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
@@ -334,8 +376,11 @@ elif menu == "Öğrenci Profil Paneli":
             </style>
             </head>
             <body onload="window.print()">
-                <div class="title">ÖĞRENCİ AKADEMİK PROFİL RAPORU</div>
-                <div class="subtitle">Not ve Ödev Gelişim Dökümü</div>
+                <div class="title-container">
+                    {logo_html}
+                    <div class="title">ÖĞRENCİ AKADEMİK PROFİL RAPORU</div>
+                    <div class="subtitle">Sadiye ve Abdullah Tan Ortaokulu - Not ve Ödev Gelişim Dökümü</div>
+                </div>
                 <table class="kv-table">
                     <tr>
                         <td style="text-align:left; border:none; font-size:14px;"><b>Öğrenci Adı Soyadı:</b> {secilen_ogrenci}</td>
@@ -363,9 +408,9 @@ elif menu == "Öğrenci Profil Paneli":
                 mime="text/html"
             )
 
-# --- NOT TAKİP ---
+# --- MODÜL 3: NOT TAKİP ---
 elif menu == "Not Takip":
-    st.header(f"Not Takip Paneli - {secilen_brans}")
+    st.header(f"📝 Not Takip Paneli - {secilen_brans}")
     secilen_sinif = st.selectbox("Sınıf Seçin", sinif_listesi, key="not_sinif")
     
     ogrenciler_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif).execute()
@@ -441,9 +486,9 @@ elif menu == "Not Takip":
             st.success("Notlar başarıyla kaydedildi.")
             st.rerun()
 
-# --- ÖDEV TAKİP ---
+# --- MODÜL 4: ÖDEV TAKİP ---
 elif menu == "Ödev Takip":
-    st.header(f"Ödev Takip Modülü - {secilen_brans}")
+    st.header(f"📦 Ödev Takip Modülü - {secilen_brans}")
     tab1, tab2, tab3 = st.tabs(["📝 Yeni Ödev Tanımla", "✅ Ödev Düzenle / Değerlendir", "📊 Ödev Raporları"])
     
     with tab1:
@@ -557,7 +602,7 @@ elif menu == "Ödev Takip":
             otuz_gun_once = bugun - timedelta(days=30)
             secilen_tarih = st.date_input("Teslim Tarihi Aralığı", value=(otuz_gun_once, bugun), key="odev_tarih_filtre")
         with col3:
-            secilen_rapor_branslar = st.multiselect("Görüntülenecek Branşlar", branslar, default=branslar, key="odev_brans_filtre")
+            secilen_rapor_branslar = st.multiselect("Görüntülenecek Branşlar", branslar, default=[secilen_brans] if st.session_state.rol=="ogretmen" else branslar, key="odev_brans_filtre")
 
         if len(secilen_tarih) != 2:
             st.warning("Lütfen bir başlangıç ve bitiş tarihi aralığı seçin.")
@@ -602,16 +647,24 @@ elif menu == "Ödev Takip":
 
                 col_btn1, col_btn2 = st.columns(2)
                 html_tablo = df_matris.to_html(border=1, justify='center')
-                html_icerik_rapor = f"<html><head><meta charset='utf-8'><title>{secilen_sinif_rapor} Ödev Raporu</title></head><body onload='window.print()'><h2>{secilen_sinif_rapor} Sınıfı Ödev Takip Çizelgesi</h2>{html_tablo}</body></html>"
-                
+                html_icerik_rapor = f"""
+                <html><head><meta charset='utf-8'><title>{secilen_sinif_rapor} Ödev Raporu</title></head>
+                <body onload='window.print()'>
+                <div style="margin-bottom: 20px; overflow: hidden;">
+                    {logo_html}
+                    <h2 style="margin-top: 10px;">Sadiye ve Abdullah Tan Ortaokulu - {secilen_sinif_rapor} Sınıfı Ödev Takip Çizelgesi</h2>
+                </div>
+                {html_tablo}
+                </body></html>
+                """
                 with col_btn1:
                     st.download_button(label="📄 PDF Olarak Kaydet", data=html_icerik_rapor, file_name=f"{secilen_sinif_rapor}_Odev_Raporu.html", mime="text/html")
                 with col_btn2:
                     st.download_button(label="📊 Excel İçin İndir", data=df_matris.to_csv(index=True, sep=";", encoding="utf-8-sig").encode("utf-8-sig"), file_name=f"{secilen_sinif_rapor}_Odev_Raporu.csv", mime="text/csv")
 
-# --- LGS TAKİP MODÜLÜ ---
+# --- MODÜL 5: LGS TAKİP ---
 elif menu == "LGS Takip":
-    st.header("LGS Hazırlık ve Takip Modülü")
+    st.header("🎯 LGS Hazırlık ve Takip Modülü")
     
     sinif_8_listesi = [s for s in sinif_listesi if s.startswith("8")]
     
@@ -771,7 +824,10 @@ elif menu == "LGS Takip":
                         <html>
                         <head><meta charset='utf-8'><title>{secilen_sinif_lgs} Sıralama Raporu</title></head>
                         <body onload='window.print()'>
-                            <h2 style='text-align:center;'>{secilen_sinif_lgs} Sınıfı {secili_deneme_analiz} Sınavı Başarı Sıralaması</h2>
+                            <div style="margin-bottom: 20px; overflow: hidden;">
+                                {logo_html}
+                                <h2 style='text-align:center;'>Sadiye ve Abdullah Tan Ortaokulu<br>{secilen_sinif_lgs} Sınıfı {secili_deneme_analiz} Sınavı Başarı Sıralaması</h2>
+                            </div>
                             {html_tablo_s}
                         </body>
                         </html>
@@ -855,8 +911,15 @@ elif menu == "LGS Takip":
                         else:
                             st.write("Son 3 sınav yöneliminin ölçülmesi için en az 3 sınav kaydı bulunmalıdır.")
                         
-                        st.write("#### 📊 Süreç İlerleme Grafiği")
-                        st.line_chart(df_lgs[["deneme_adi", "Toplam Net", "lgs_puani"]].set_index("deneme_adi"))
+                        # --- YENİ: AYRIŞTIRILMIŞ GRAFİKLER ---
+                        st.write("#### 📊 Süreç İlerleme Grafikleri")
+                        col_g1, col_g2 = st.columns(2)
+                        with col_g1:
+                            st.write("**LGS Puan Gelişimi**")
+                            st.line_chart(df_lgs.set_index("deneme_adi")["lgs_puani"], color="#2196F3")
+                        with col_g2:
+                            st.write("**Toplam Net Gelişimi**")
+                            st.line_chart(df_lgs.set_index("deneme_adi")["Toplam Net"], color="#4CAF50")
 
                     with sub_tab2:
                         st.write("Karşılaştırılacak iki farklı deneme seçerek kafa kafaya (Head-to-Head) performans analizi yapabilirsiniz.")
@@ -939,7 +1002,8 @@ elif menu == "LGS Takip":
                             html_karsilastirma = f"""
                             <html><head><meta charset='utf-8'><style>
                                 body {{ font-family: Arial; margin: 40px; color: #333; }}
-                                .h {{ text-align: center; background: #eee; padding: 10px; border-radius: 5px; }}
+                                .h-container {{ margin-bottom: 30px; overflow: hidden; }}
+                                .h {{ text-align: center; background: #eee; padding: 10px; border-radius: 5px; margin-top: 10px; }}
                                 table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
                                 th, td {{ border: 1px solid #ddd; padding: 10px; text-align: center; }}
                                 th {{ background: #f5f5f5; }}
@@ -947,7 +1011,10 @@ elif menu == "LGS Takip":
                                 .info {{ background: #f9f9f9; border-left: 5px solid #FF9800; padding: 15px; margin-top: 20px; font-size: 13px; line-height: 1.5; }}
                             </style></head>
                             <body onload='window.print()'>
-                                <div class='h'><h2>LGS SINAV KARŞILAŞTIRMA RAPORU</h2></div>
+                                <div class="h-container">
+                                    {logo_html}
+                                    <div class='h'><h2>LGS SINAV KARŞILAŞTIRMA RAPORU</h2></div>
+                                </div>
                                 <p><b>Öğrenci:</b> {secilen_ogr_analiz} | <b>Sınıf:</b> {secilen_sinif_lgs}</p>
                                 <p><b>Karşılaştırılan Sınavlar:</b> {d1_isim} vs {d2_isim}</p>
                                 <table>
@@ -967,22 +1034,28 @@ elif menu == "LGS Takip":
                             st.write("#### 💾 Seçili Sınav Karşılaştırma Dökümünü PDF İndir")
                             st.download_button("📄 Karşılaştırma Raporunu PDF İndir", html_karsilastirma, file_name=f"{secilen_ogr_analiz}_Karsilastirma.html", mime="text/html")
 
-                    fig_pdf, ax_pdf = plt.subplots(figsize=(6, 3))
-                    ax_pdf.plot(df_lgs["deneme_adi"], df_lgs["lgs_puani"], marker='o', color='#2196F3', linewidth=2)
-                    ax_pdf.set_ylabel('Puan', color='#2196F3')
-                    ax_pdf.tick_params(axis='y', labelcolor='#2196F3')
-                    ax_pdf.grid(True, linestyle='--', alpha=0.4)
+                    # --- GLOBAL SÜREÇ PDF (AYRI GRAFİKLERLE) ---
+                    # Puan Grafiği Üretimi
+                    fig_puan, ax_puan = plt.subplots(figsize=(6, 2.5))
+                    ax_puan.plot(df_lgs["deneme_adi"], df_lgs["lgs_puani"], marker='o', color='#2196F3', linewidth=2)
+                    ax_puan.set_title("LGS Puan Trendi", fontsize=10)
+                    ax_puan.grid(True, linestyle='--', alpha=0.4)
+                    buf_puan = io.BytesIO()
+                    plt.savefig(buf_puan, format='png', bbox_inches='tight', dpi=120)
+                    buf_puan.seek(0)
+                    puan_trend_b64 = base64.b64encode(buf_puan.read()).decode('utf-8')
+                    plt.close(fig_puan)
                     
-                    ax_net = ax_pdf.twinx()
-                    ax_net.plot(df_lgs["deneme_adi"], df_lgs["Toplam Net"], marker='s', color='#4CAF50', linewidth=1.5, linestyle='--')
-                    ax_net.set_ylabel('Toplam Net', color='#4CAF50')
-                    ax_net.tick_params(axis='y', labelcolor='#4CAF50')
-                    
-                    buf_pdf = io.BytesIO()
-                    plt.savefig(buf_pdf, format='png', bbox_inches='tight', dpi=140)
-                    buf_pdf.seek(0)
-                    lgs_trend_b64 = base64.b64encode(buf_pdf.read()).decode('utf-8')
-                    plt.close(fig_pdf)
+                    # Net Grafiği Üretimi
+                    fig_net, ax_net = plt.subplots(figsize=(6, 2.5))
+                    ax_net.plot(df_lgs["deneme_adi"], df_lgs["Toplam Net"], marker='s', color='#4CAF50', linewidth=2)
+                    ax_net.set_title("Toplam Net Trendi", fontsize=10)
+                    ax_net.grid(True, linestyle='--', alpha=0.4)
+                    buf_net = io.BytesIO()
+                    plt.savefig(buf_net, format='png', bbox_inches='tight', dpi=120)
+                    buf_net.seek(0)
+                    net_trend_b64 = base64.b64encode(buf_net.read()).decode('utf-8')
+                    plt.close(fig_net)
                     
                     df_pdf_tablo = df_lgs[["deneme_adi", "Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net", "Toplam Net", "lgs_puani"]].rename(columns={"deneme_adi":"Sınav", "lgs_puani":"LGS Puanı"})
                     html_table_lgs = df_pdf_tablo.to_html(border=1, index=False, justify='center')
@@ -993,8 +1066,9 @@ elif menu == "LGS Takip":
                     <html>
                     <head><meta charset="utf-8"><style>
                         body {{ font-family: Arial, sans-serif; margin: 35px; color: #333; }}
-                        .title {{ text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 5px; }}
-                        .subtitle {{ text-align: center; font-size: 14px; color: #555; margin-bottom: 25px; }}
+                        .title-container {{ margin-bottom: 30px; overflow: hidden; }}
+                        .title {{ text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 5px; margin-top: 10px; }}
+                        .subtitle {{ text-align: center; font-size: 14px; color: #555; }}
                         .card-box {{ display: flex; justify-content: space-between; gap: 15px; margin-bottom: 25px; }}
                         .card {{ flex: 1; border: 1px solid #ccc; padding: 12px; text-align: center; background-color: #fafafa; border-radius: 5px; }}
                         .card h4 {{ margin: 0 0 6px 0; font-size: 12px; color: #666; text-transform: uppercase; }}
@@ -1003,14 +1077,17 @@ elif menu == "LGS Takip":
                         table {{ width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }}
                         th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
                         th {{ background-color: #f5f5f5; }}
-                        .graph-area {{ text-align: center; margin-top: 20px; }}
-                        .graph-img {{ width: 100%; max-width: 580px; }}
+                        .graph-container {{ text-align: center; margin-top: 20px; }}
+                        .graph-img {{ width: 48%; max-width: 350px; display: inline-block; }}
                         .pedagogic-box {{ font-size: 12px; line-height: 1.6; background-color: #f9fbfd; border-left: 4px solid #2196F3; padding: 15px; margin-top: 15px; }}
                         .pedagogic-title {{ font-weight: bold; color: #111; margin-top: 10px; font-size: 13px; }}
                     </style></head>
                     <body onload="window.print()">
-                        <div class="title">LGS HAZIRLIK SÜRECİ AKADEMİK RAPORU</div>
-                        <div class="subtitle">Veri Odaklı Genel Rehberlik ve Süreç Analiz Dökümü</div>
+                        <div class="title-container">
+                            {logo_html}
+                            <div class="title">LGS HAZIRLIK SÜRECİ AKADEMİK RAPORU</div>
+                            <div class="subtitle">Sadiye ve Abdullah Tan Ortaokulu - Genel Süreç Analizi</div>
+                        </div>
                         <table style="width:100%; border:none; margin-bottom:20px;">
                             <tr>
                                 <td style="text-align:left; border:none; font-size:14px;"><b>Öğrenci Adı Soyadı:</b> {secilen_ogr_analiz}</td>
@@ -1024,8 +1101,11 @@ elif menu == "LGS Takip":
                         </div>
                         <div class="section-title">📊 Deneme Sınavları Net ve Skor Dağılım Geçmişi</div>
                         {html_table_lgs}
-                        <div class="section-title">📈 Süreç İlerleme ve Başarı Grafiği</div>
-                        <div class="graph-area"><img class="graph-img" src="data:image/png;base64,{lgs_trend_b64}"></div>
+                        <div class="section-title">📈 Ayrıştırılmış İlerleme ve Trend Grafikleri</div>
+                        <div class="graph-container">
+                            <img class="graph-img" src="data:image/png;base64,{puan_trend_b64}">
+                            <img class="graph-img" src="data:image/png;base64,{net_trend_b64}">
+                        </div>
                         <div class="section-title">🎯 Rehberlik Analizi ve Pedagojik Süreç Bulguları</div>
                         <div class="pedagogic-box">
                             <div class="pedagogic-title">1. Sınav İsabet Oranı (Emin Olma Yüzdesi): %{isabet_orani:.1f}</div>
@@ -1046,7 +1126,7 @@ elif menu == "LGS Takip":
                         mime="text/html"
                     )
 
-# --- TEST VERİSİ ÜRETİMİ ---
+# --- MODÜL 6: TEST VERİSİ (SADECE ADMİN) ---
 elif menu == "🛠️ Test Verisi Üret":
     st.header("Sisteme Rastgele Test Verisi Ekleme")
     st.warning("Bu işlem veritabanınıza rastgele öğrenciler, notlar ve ödevler ekleyecektir.")
