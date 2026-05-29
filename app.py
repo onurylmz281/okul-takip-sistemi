@@ -51,20 +51,13 @@ def get_base64_logo():
 pdf_logo_b64 = get_base64_logo()
 logo_html = f'<img src="data:image/png;base64,{pdf_logo_b64}" style="width: 70px; float: left; margin-right: 15px;">' if pdf_logo_b64 else ''
 
-# --- 4. OTURUM YÖNETİMİ VE YÖNLENDİRME (ROUTING) STATES ---
+# --- 4. OTURUM YÖNETİMİ ---
 if "giris_yapildi" not in st.session_state:
     st.session_state.giris_yapildi = False
     st.session_state.rol = None
     st.session_state.brans = None
 
-if "aktif_menu" not in st.session_state:
-    st.session_state.aktif_menu = "Öğrenci Profil Paneli"
-if "profil_sinif_secim" not in st.session_state:
-    st.session_state.profil_sinif_secim = sinif_listesi[0]
-if "profil_ogrenci_secim" not in st.session_state:
-    st.session_state.profil_ogrenci_secim = "Seçiniz..."
-
-# --- 5. GİRİŞ EKRANI ---
+# --- 5. GİRİŞ EKRANI (WELCOME PAGE - VERİ TABANI BAĞLANTILI) ---
 if not st.session_state.giris_yapildi:
     with st.container():
         col_logo, col_baslik = st.columns([1, 6])
@@ -102,6 +95,7 @@ if not st.session_state.giris_yapildi:
             if giris_butonu:
                 try:
                     res = supabase.table("kullanicilar").select("*").eq("kullanici_adi", k_adi).execute()
+                    
                     if res.data and len(res.data) > 0:
                         if res.data[0]["sifre"] == sifre:
                             st.session_state.giris_yapildi = True
@@ -113,11 +107,12 @@ if not st.session_state.giris_yapildi:
                     else:
                         st.error("❌ Sistemde böyle bir kullanıcı bulunamadı.")
                 except Exception as e:
-                    st.error(f"Sistem Hatası: Veritabanı bağlantısı kurulamadı. Hata Kodu: {str(e)}")
+                    st.error("Bağlantı hatası: Lütfen 1. Adımdaki 'kullanicilar' tablosunun oluşturulduğundan emin olun.")
     st.stop() 
 
 # --- 6. ANA UYGULAMA PANELİ ---
 
+# --- Üst Bar (Başlık + Sağ Üst Logo) ---
 top_col1, top_col2 = st.columns([8, 1])
 with top_col1:
     st.title("🚀 Okul Takip Sistemi")
@@ -134,6 +129,7 @@ if st.sidebar.button("🚪 Güvenli Çıkış", use_container_width=True):
 
 st.sidebar.divider()
 
+# Branş Kısıtlaması (Rol Bazlı Menü Yönetimi)
 if st.session_state.rol == "admin":
     secilen_brans = st.sidebar.selectbox("İşlem Yapılacak Branş", branslar)
     moduller = ["Öğrenci Yönetimi", "Öğrenci Profil Paneli", "Not Takip", "Ödev Takip", "LGS Takip", "🔑 Şifre İşlemleri", "🛠️ Test Verisi Modülü"]
@@ -142,11 +138,7 @@ else:
     secilen_brans = st.session_state.brans
     moduller = ["Öğrenci Profil Paneli", "Not Takip", "Ödev Takip", "LGS Takip"]
 
-# Menü yönlendirme yapısı
-if st.session_state.aktif_menu not in moduller:
-    st.session_state.aktif_menu = moduller[0]
-
-menu = st.sidebar.radio("Modüller", moduller, key="aktif_menu")
+menu = st.sidebar.radio("Modüller", moduller)
 
 
 # --- MODÜL 1: ÖĞRENCİ YÖNETİMİ (SADECE ADMİN) ---
@@ -157,17 +149,15 @@ if menu == "Öğrenci Yönetimi":
     
     with tab_ekle:
         secilen_sinif = st.selectbox("Sınıf Seçin", sinif_listesi, key="ogr_ekle_sinif")
+        
         with st.form("ogrenci_ekle_form", clear_on_submit=True):
             yeni_ogrenci = st.text_input("Öğrenci Adı Soyadı")
             kaydet_btn = st.form_submit_button("Öğrenciyi Sisteme Ekle")
             
             if kaydet_btn and yeni_ogrenci:
-                try:
-                    supabase.table("ogrenciler").insert({"ad_soyad": yeni_ogrenci, "sinif": secilen_sinif}).execute()
-                    st.success(f"✅ {yeni_ogrenci} sisteme başarıyla eklendi.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Kayıt işlemi başarısız: {str(e)}")
+                supabase.table("ogrenciler").insert({"ad_soyad": yeni_ogrenci, "sinif": secilen_sinif}).execute()
+                st.success("Kayıt başarılı.")
+                st.rerun()
                 
         st.subheader(f"{secilen_sinif} Sınıf Listesi")
         ogrenciler_res = supabase.table("ogrenciler").select("*").eq("sinif", secilen_sinif).execute()
@@ -190,245 +180,242 @@ if menu == "Öğrenci Yönetimi":
             
             if silinecek_ogrenciler_ad:
                 silinecek_ogr_id_list = [ogr_secenekleri_sil[ad] for ad in silinecek_ogrenciler_ad]
+                
                 if st.button(f"🗑️ Seçili {len(silinecek_ogrenciler_ad)} Öğrenciyi ve Tüm Verilerini Sil", type="primary"):
-                    try:
-                        supabase.table("notlar").delete().in_("ogrenci_id", silinecek_ogr_id_list).execute()
-                        supabase.table("odev_teslimleri").delete().in_("ogrenci_id", silinecek_ogr_id_list).execute()
-                        supabase.table("lgs_denemeleri").delete().in_("ogrenci_id", silinecek_ogr_id_list).execute()
-                        supabase.table("ogrenciler").delete().in_("id", silinecek_ogr_id_list).execute()
-                        st.success(f"✅ Seçilen {len(silinecek_ogrenciler_ad)} öğrenci ve ilişkili tüm veriler tamamen silindi.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Silme işlemi başarısız: {str(e)}")
+                    supabase.table("notlar").delete().in_("ogrenci_id", silinecek_ogr_id_list).execute()
+                    supabase.table("odev_teslimleri").delete().in_("ogrenci_id", silinecek_ogr_id_list).execute()
+                    supabase.table("lgs_denemeleri").delete().in_("ogrenci_id", silinecek_ogr_id_list).execute()
+                    supabase.table("ogrenciler").delete().in_("id", silinecek_ogr_id_list).execute()
+                    
+                    st.success(f"Seçilen {len(silinecek_ogrenciler_ad)} öğrenci ve ilişkili tüm akademik veriler sistemden tamamen silindi.")
+                    st.rerun()
             else:
                 st.info("Silmek için lütfen listeden en az bir öğrenci seçin.")
 
 # --- MODÜL 2: ÖĞRENCİ PROFİL PANELİ ---
 elif menu == "Öğrenci Profil Paneli":
     st.header("👤 Öğrenci Profil Paneli")
-    secilen_sinif = st.selectbox("Sınıf Seçin", sinif_listesi, key="profil_sinif_secim")
+    secilen_sinif = st.selectbox("Sınıf Seçin", sinif_listesi, key="profil_sinif")
+    is_8th_grade = secilen_sinif.startswith("8")
     
     ogrenciler_res = supabase.table("ogrenciler").select("*").eq("sinif", secilen_sinif).execute()
-    ogrenci_isimleri = ["Seçiniz..."]
+    
     if ogrenciler_res.data:
-        ogrenci_isimleri += [ogr["ad_soyad"] for ogr in ogrenciler_res.data]
+        ogrenci_isimleri = [ogr["ad_soyad"] for ogr in ogrenciler_res.data]
+        secilen_ogrenci = st.selectbox("Profilini Görüntülemek İstediğiniz Öğrenciyi Seçin", ["Seçiniz..."] + ogrenci_isimleri)
         
-    if st.session_state.profil_ogrenci_secim not in ogrenci_isimleri:
-        st.session_state.profil_ogrenci_secim = "Seçiniz..."
-        
-    secilen_ogrenci = st.selectbox("Profilini Görüntülemek İstediğiniz Öğrenciyi Seçin", ogrenci_isimleri, key="profil_ogrenci_secim")
-        
-    if secilen_ogrenci != "Seçiniz...":
-        ogr_data = next(ogr for ogr in ogrenciler_res.data if ogr["ad_soyad"] == secilen_ogrenci)
-        ogr_id = ogr_data["id"]
-        
-        st.markdown(f"### 👤 {secilen_ogrenci} - Akademik Gelişim Özet Raporu")
-        
-        notlar_res = supabase.table("notlar").select("*").eq("ogrenci_id", ogr_id).execute()
-        genel_ortalama = 0
-        df_html_notlar = "<p>Not verisi bulunamadı.</p>"
-        if notlar_res.data:
-            df_profil_notlar = pd.DataFrame(notlar_res.data)
-            df_gosterim = df_profil_notlar.rename(columns={
-                "brans": "Branş", "sinav_1": "1. Yazılı", "sinav_2": "2. Yazılı", 
-                "perf_1": "1. Performans", "perf_2": "2. Performans", "proje": "Proje"
-            })
+        if secilen_ogrenci != "Seçiniz...":
+            ogr_data = next(ogr for ogr in ogrenciler_res.data if ogr["ad_soyad"] == secilen_ogrenci)
+            ogr_id = ogr_data["id"]
             
-            def satir_ort(row):
-                n = [row["1. Yazılı"], row["2. Yazılı"], row["1. Performans"], row["2. Performans"], row["Proje"]]
-                g = [float(x) for x in n if pd.notnull(x)]
-                return round(sum(g) / len(g), 2) if g else None
-                
-            df_gosterim["Ortalama"] = df_gosterim.apply(satir_ort, axis=1)
-            df_gosterim = df_gosterim[["Branş", "1. Yazılı", "2. Yazılı", "1. Performans", "2. Performans", "Proje", "Ortalama"]]
+            st.markdown(f"### 👤 {secilen_ogrenci} - Akademik Gelişim Özet Raporu")
             
-            gecerli_ortalamalar = df_gosterim["Ortalama"].dropna().tolist()
-            if gecerli_ortalamalar:
-                genel_ortalama = round(sum(gecerli_ortalamalar) / len(gecerli_ortalamalar), 2)
-            
-            st.subheader("📊 Branş Bazlı Not Durumu")
-            st.dataframe(df_gosterim, hide_index=True, use_container_width=True)
-            df_html_notlar = df_gosterim.to_html(border=1, index=False, justify='center')
-        else:
-            st.info("Bu öğrenciye ait herhangi bir not verisi bulunmamaktadır.")
-        
-        odevler_res = supabase.table("odev_teslimleri").select("*").eq("ogrenci_id", ogr_id).execute()
-        odev_orani = 0
-        genel_graph_base64 = ""
-        pdf_brans_grafikleri_html = ""
-        df_html_odevler = "<p>Ödev verisi bulunamadı.</p>"
-        
-        if odevler_res.data:
-            df_odevler_all = pd.DataFrame(odevler_res.data)
-            toplam_odev = len(df_odevler_all)
-            yapti_sayisi = sum(1 for o in odevler_res.data if o["durum"] == "Yaptı")
-            odev_orani = round((yapti_sayisi / toplam_odev) * 100, 1)
-            
-            st.divider()
-            st.subheader("📚 Ödev İstatistikleri ve Ders Bazlı Dağılım Paneli")
-            
-            col_f1, col_f2 = st.columns(2)
-            with col_f1:
-                filtre_brans = st.selectbox("Ders Seçimi", ["Tüm Dersler"] + branslar, key="prof_hw_brans")
-            with col_f2:
-                filtre_durum = st.selectbox("Ödev Durumu", ["Tüm Durumlar", "Yaptı", "Yarım", "Yapmadı", "Gelmedi"], key="prof_hw_durum")
-            
-            odev_detay_res = supabase.table("odev_teslimleri").select("durum, ogretmen_notu, odevler(odev_adi, brans)").eq("ogrenci_id", ogr_id).execute()
-            detay_liste = []
-            for d in odev_detay_res.data:
-                odev_bilgisi = d.get("odevler") or {}
-                detay_liste.append({
-                    "Branş": odev_bilgisi.get("brans", ""),
-                    "Ödev Adı": odev_bilgisi.get("odev_adi", ""),
-                    "Durum": d.get("durum", ""),
-                    "Açıklama/Not": d.get("ogretmen_notu", "")
+            notlar_res = supabase.table("notlar").select("*").eq("ogrenci_id", ogr_id).execute()
+            genel_ortalama = 0
+            df_html_notlar = "<p>Not verisi bulunamadı.</p>"
+            if notlar_res.data:
+                df_profil_notlar = pd.DataFrame(notlar_res.data)
+                df_gosterim = df_profil_notlar.rename(columns={
+                    "brans": "Branş", "sinav_1": "1. Yazılı", "sinav_2": "2. Yazılı", 
+                    "perf_1": "1. Performans", "perf_2": "2. Performans", "proje": "Proje"
                 })
-            df_full_odev = pd.DataFrame(detay_liste)
+                
+                def satir_ort(row):
+                    n = [row["1. Yazılı"], row["2. Yazılı"], row["1. Performans"], row["2. Performans"], row["Proje"]]
+                    g = [float(x) for x in n if pd.notnull(x)]
+                    return round(sum(g) / len(g), 2) if g else None
+                    
+                df_gosterim["Ortalama"] = df_gosterim.apply(satir_ort, axis=1)
+                df_gosterim = df_gosterim[["Branş", "1. Yazılı", "2. Yazılı", "1. Performans", "2. Performans", "Proje", "Ortalama"]]
+                
+                gecerli_ortalamalar = df_gosterim["Ortalama"].dropna().tolist()
+                if gecerli_ortalamalar:
+                    genel_ortalama = round(sum(gecerli_ortalamalar) / len(gecerli_ortalamalar), 2)
+                
+                st.subheader("📊 Branş Bazlı Not Durumu")
+                st.dataframe(df_gosterim, hide_index=True, use_container_width=True)
+                df_html_notlar = df_gosterim.to_html(border=1, index=False, justify='center')
+            else:
+                st.info("Bu öğrenciye ait herhangi bir not verisi bulunmamaktadır.")
             
-            df_filtered_odev = df_full_odev.copy()
-            if filtre_brans != "Tüm Dersler":
-                df_filtered_odev = df_filtered_odev[df_filtered_odev["Branş"] == filtre_brans]
-            if filtre_durum != "Tüm Durumlar":
-                df_filtered_odev = df_filtered_odev[df_filtered_odev["Durum"] == filtre_durum]
+            odevler_res = supabase.table("odev_teslimleri").select("*").eq("ogrenci_id", ogr_id).execute()
+            odev_orani = 0
+            genel_graph_base64 = ""
+            pdf_brans_grafikleri_html = ""
+            df_html_odevler = "<p>Ödev verisi bulunamadı.</p>"
             
-            col_grafik, col_tablo = st.columns([5, 5])
-            
-            with col_grafik:
-                if not df_filtered_odev.empty:
-                    color_map = {"Yaptı": "#4CAF50", "Yarım": "#FFC107", "Yapmadı": "#F44336", "Gelmedi": "#9E9E9E"}
-                    status_counts_genel = df_filtered_odev["Durum"].value_counts()
-                    current_colors_genel = [color_map.get(idx_name, "#2196F3") for idx_name in status_counts_genel.index]
-                    
-                    fig_genel, ax_genel = plt.subplots(figsize=(3.5, 3.5))
-                    wedges, texts, autotexts = ax_genel.pie(
-                        status_counts_genel, labels=status_counts_genel.index, autopct='%1.1f%%', 
-                        startangle=90, colors=current_colors_genel, wedgeprops=dict(width=0.4, edgecolor='w')
-                    )
-                    plt.setp(autotexts, size=8, weight="bold")
-                    plt.setp(texts, size=9)
-                    st.write("**Genel Ödev Dağılımı**")
-                    st.pyplot(fig_genel)
-                    
-                    buf_genel = io.BytesIO()
-                    plt.savefig(buf_genel, format='png', bbox_inches='tight', dpi=130)
-                    buf_genel.seek(0)
-                    genel_graph_base64 = base64.b64encode(buf_genel.read()).decode('utf-8')
-                    plt.close(fig_genel)
-                    
-                    st.divider()
-                    st.write("**Ders Bazlı Ödev Dağılımları**")
-                    cizilecek_branslar = branslar if filtre_brans == "Tüm Dersler" else [filtre_brans]
-                    aktif_branslar = [b for b in cizilecek_branslar if not df_filtered_odev[df_filtered_odev["Branş"] == b].empty]
-                    
-                    if aktif_branslar:
-                        cols_ui = st.columns(2)
-                        idx = 0
-                        for b in aktif_branslar:
-                            df_b = df_filtered_odev[df_filtered_odev["Branş"] == b]
-                            status_counts = df_b["Durum"].value_counts()
-                            current_colors = [color_map.get(idx_name, "#2196F3") for idx_name in status_counts.index]
-                            
-                            fig, ax = plt.subplots(figsize=(2.8, 2.8))
-                            wedges, texts, autotexts = ax.pie(
-                                status_counts, labels=status_counts.index, autopct='%1.1f%%', 
-                                startangle=90, colors=current_colors, wedgeprops=dict(width=0.4, edgecolor='w')
-                            )
-                            plt.setp(autotexts, size=7, weight="bold")
-                            plt.setp(texts, size=8)
-                            ax.set_title(f"{b}", fontsize=9, weight="bold", pad=5)
-                            
-                            with cols_ui[idx % 2]:
-                                st.pyplot(fig)
-                            
-                            buf = io.BytesIO()
-                            plt.savefig(buf, format='png', bbox_inches='tight', dpi=130)
-                            buf.seek(0)
-                            img_b64 = base64.b64encode(buf.read()).decode('utf-8')
-                            plt.close(fig)
-                            pdf_brans_grafikleri_html += f'<div style="display: inline-block; width: 45%; margin: 2%; text-align: center; vertical-align: top;"><img src="data:image/png;base64,{img_b64}" style="width: 100%; max-width: 240px;"></div>'
-                            idx += 1
+            if odevler_res.data:
+                df_odevler_all = pd.DataFrame(odevler_res.data)
+                toplam_odev = len(df_odevler_all)
+                yapti_sayisi = sum(1 for o in odevler_res.data if o["durum"] == "Yaptı")
+                odev_orani = round((yapti_sayisi / toplam_odev) * 100, 1)
+                
+                st.divider()
+                st.subheader("📚 Ödev İstatistikleri ve Ders Bazlı Dağılım Paneli")
+                
+                col_f1, col_f2 = st.columns(2)
+                with col_f1:
+                    filtre_brans = st.selectbox("Ders Seçimi", ["Tüm Dersler"] + branslar, key="prof_hw_brans")
+                with col_f2:
+                    filtre_durum = st.selectbox("Ödev Durumu", ["Tüm Durumlar", "Yaptı", "Yarım", "Yapmadı", "Gelmedi"], key="prof_hw_durum")
+                
+                odev_detay_res = supabase.table("odev_teslimleri").select("durum, ogretmen_notu, odevler(odev_adi, brans)").eq("ogrenci_id", ogr_id).execute()
+                detay_liste = []
+                for d in odev_detay_res.data:
+                    odev_bilgisi = d.get("odevler") or {}
+                    detay_liste.append({
+                        "Branş": odev_bilgisi.get("brans", ""),
+                        "Ödev Adı": odev_bilgisi.get("odev_adi", ""),
+                        "Durum": d.get("durum", ""),
+                        "Açıklama/Not": d.get("ogretmen_notu", "")
+                    })
+                df_full_odev = pd.DataFrame(detay_liste)
+                
+                df_filtered_odev = df_full_odev.copy()
+                if filtre_brans != "Tüm Dersler":
+                    df_filtered_odev = df_filtered_odev[df_filtered_odev["Branş"] == filtre_brans]
+                if filtre_durum != "Tüm Durumlar":
+                    df_filtered_odev = df_filtered_odev[df_filtered_odev["Durum"] == filtre_durum]
+                
+                col_grafik, col_tablo = st.columns([5, 5])
+                
+                with col_grafik:
+                    if not df_filtered_odev.empty:
+                        color_map = {"Yaptı": "#4CAF50", "Yarım": "#FFC107", "Yapmadı": "#F44336", "Gelmedi": "#9E9E9E"}
+                        
+                        st.write("**Genel Ödev Dağılımı (Filtrelenmiş Veri)**")
+                        status_counts_genel = df_filtered_odev["Durum"].value_counts()
+                        current_colors_genel = [color_map.get(idx_name, "#2196F3") for idx_name in status_counts_genel.index]
+                        
+                        fig_genel, ax_genel = plt.subplots(figsize=(3.5, 3.5))
+                        wedges, texts, autotexts = ax_genel.pie(
+                            status_counts_genel, labels=status_counts_genel.index, autopct='%1.1f%%', 
+                            startangle=90, colors=current_colors_genel, wedgeprops=dict(width=0.4, edgecolor='w')
+                        )
+                        plt.setp(autotexts, size=8, weight="bold")
+                        plt.setp(texts, size=9)
+                        st.pyplot(fig_genel)
+                        
+                        buf_genel = io.BytesIO()
+                        plt.savefig(buf_genel, format='png', bbox_inches='tight', dpi=130)
+                        buf_genel.seek(0)
+                        genel_graph_base64 = base64.b64encode(buf_genel.read()).decode('utf-8')
+                        plt.close(fig_genel)
+                        
+                        st.divider()
+                        st.write("**Ders Bazlı Ödev Dağılımları**")
+                        cizilecek_branslar = branslar if filtre_brans == "Tüm Dersler" else [filtre_brans]
+                        aktif_branslar = [b for b in cizilecek_branslar if not df_filtered_odev[df_filtered_odev["Branş"] == b].empty]
+                        
+                        if aktif_branslar:
+                            cols_ui = st.columns(2)
+                            idx = 0
+                            for b in aktif_branslar:
+                                df_b = df_filtered_odev[df_filtered_odev["Branş"] == b]
+                                status_counts = df_b["Durum"].value_counts()
+                                current_colors = [color_map.get(idx_name, "#2196F3") for idx_name in status_counts.index]
+                                
+                                fig, ax = plt.subplots(figsize=(2.8, 2.8))
+                                wedges, texts, autotexts = ax.pie(
+                                    status_counts, labels=status_counts.index, autopct='%1.1f%%', 
+                                    startangle=90, colors=current_colors, wedgeprops=dict(width=0.4, edgecolor='w')
+                                )
+                                plt.setp(autotexts, size=7, weight="bold")
+                                plt.setp(texts, size=8)
+                                ax.set_title(f"{b}", fontsize=9, weight="bold", pad=5)
+                                
+                                with cols_ui[idx % 2]:
+                                    st.pyplot(fig)
+                                
+                                buf = io.BytesIO()
+                                plt.savefig(buf, format='png', bbox_inches='tight', dpi=130)
+                                buf.seek(0)
+                                img_b64 = base64.b64encode(buf.read()).decode('utf-8')
+                                plt.close(fig)
+                                pdf_brans_grafikleri_html += f'<div style="display: inline-block; width: 45%; margin: 2%; text-align: center; vertical-align: top;"><img src="data:image/png;base64,{img_b64}" style="width: 100%; max-width: 240px;"></div>'
+                                idx += 1
+                        else:
+                            st.warning("Ders bazlı analiz için veri bulunamadı.")
                     else:
-                        st.warning("Ders bazlı analiz için veri bulunamadı.")
-                else:
-                    st.warning("Seçilen kriterlere uygun ödev kaydı bulunamadığından grafik oluşturulamadı.")
+                        st.warning("Seçilen kriterlere uygun ödev kaydı bulunamadığından grafik oluşturulamadı.")
+                
+                with col_tablo:
+                    st.write("**Filtrelenmiş Ödev Sorumluluk Listesi**")
+                    st.dataframe(df_filtered_odev, hide_index=True, use_container_width=True)
+                    df_html_odevler = df_filtered_odev.to_html(border=1, index=False, justify='center')
+            else:
+                st.info("Bu öğrenciye ait ödev değerlendirmesi bulunmamaktadır.")
+
+            st.sidebar.markdown("---")
+            st.sidebar.subheader("Öğrenci Genel Durumu")
+            st.sidebar.metric("Genel Not Ortalaması", f"{genel_ortalama} / 100")
+            st.sidebar.metric("Ödev Tamamlama Oranı", f"% {odev_orani}")
             
-            with col_tablo:
-                st.write("**Filtrelenmiş Ödev Sorumluluk Listesi**")
-                st.dataframe(df_filtered_odev, hide_index=True, use_container_width=True)
-                df_html_odevler = df_filtered_odev.to_html(border=1, index=False, justify='center')
-        else:
-            st.info("Bu öğrenciye ait ödev değerlendirmesi bulunmamaktadır.")
+            html_odev_grafikleri = ""
+            if genel_graph_base64:
+                html_odev_grafikleri = f"""
+                <div style="text-align: center; margin-top: 15px;">
+                    <div style="display: inline-block; width: 45%; vertical-align: top;">
+                        <b>Genel Ödev Dağılımı</b><br>
+                        <img src="data:image/png;base64,{genel_graph_base64}" style="max-width: 250px;">
+                    </div>
+                    <div style="display: inline-block; width: 50%; vertical-align: top;">
+                        <b>Ders Bazlı Ödev Dağılımları</b><br>
+                        {pdf_brans_grafikleri_html}
+                    </div>
+                </div>
+                """
 
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("Öğrenci Genel Durumu")
-        st.sidebar.metric("Genel Not Ortalaması", f"{genel_ortalama} / 100")
-        st.sidebar.metric("Ödev Tamamlama Oranı", f"% {odev_orani}")
-        
-        html_odev_grafikleri = ""
-        if genel_graph_base64:
-            html_odev_grafikleri = f"""
-            <div style="text-align: center; margin-top: 15px;">
-                <div style="display: inline-block; width: 45%; vertical-align: top;">
-                    <b>Genel Ödev Dağılımı</b><br>
-                    <img src="data:image/png;base64,{genel_graph_base64}" style="max-width: 250px;">
+            profil_pdf_html = f"""
+            <html>
+            <head>
+            <meta charset="utf-8">
+            <title>Öğrenci Profil Raporu</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 35px; color: #333; }}
+                .title-container {{ margin-bottom: 30px; overflow: hidden; }}
+                .title {{ text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 5px; margin-top: 10px; }}
+                .subtitle {{ text-align: center; font-size: 14px; color: #555; }}
+                .kv-table {{ width: 100%; border: none; margin-bottom: 20px; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }}
+                th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
+                th {{ background-color: #f5f5f5; font-weight: bold; }}
+                .section-title {{ font-size: 15px; font-weight: bold; color: #fff; background-color: #2196F3; padding: 6px 10px; margin-top: 25px; border-radius: 3px; }}
+                .summary-box {{ background-color: #f9fbfd; border-left: 4px solid #4CAF50; padding: 12px; margin-top: 15px; font-size: 13px; text-align: center; }}
+            </style>
+            </head>
+            <body onload="window.print()">
+                <div class="title-container">
+                    {logo_html}
+                    <div class="title">ÖĞRENCİ AKADEMİK PROFİL RAPORU</div>
+                    <div class="subtitle">Sadiye ve Abdullah Tan Ortaokulu - Not ve Ödev Gelişim Dökümü</div>
                 </div>
-                <div style="display: inline-block; width: 50%; vertical-align: top;">
-                    <b>Ders Bazlı Ödev Dağılımları</b><br>
-                    {pdf_brans_grafikleri_html}
+                <table class="kv-table">
+                    <tr>
+                        <td style="text-align:left; border:none; font-size:14px;"><b>Öğrenci Adı Soyadı:</b> {secilen_ogrenci}</td>
+                        <td style="text-align:right; border:none; font-size:14px;"><b>Sınıfı:</b> {secilen_sinif} | <b>Rapor Tarihi:</b> {date.today().strftime('%d.%m.%Y')}</td>
+                    </tr>
+                </table>
+                <div class="summary-box">
+                    <b>Genel Not Ortalaması:</b> {genel_ortalama} / 100 &nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp; <b>Ödev Tamamlama Oranı:</b> % {odev_orani}
                 </div>
-            </div>
+                <div class="section-title">📊 Branş Bazlı Not Durumu</div>
+                {df_html_notlar}
+                <div class="section-title">📚 Ödev Dağılım İstatistikleri</div>
+                {html_odev_grafikleri}
+                <div class="section-title">📝 Ödev Sorumluluk Listesi</div>
+                {df_html_odevler}
+            </body>
+            </html>
             """
-
-        profil_pdf_html = f"""
-        <html>
-        <head>
-        <meta charset="utf-8">
-        <title>Öğrenci Profil Raporu</title>
-        <style>
-            body {{ font-family: Arial, sans-serif; margin: 35px; color: #333; }}
-            .title-container {{ margin-bottom: 30px; overflow: hidden; }}
-            .title {{ text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 5px; margin-top: 10px; }}
-            .subtitle {{ text-align: center; font-size: 14px; color: #555; }}
-            .kv-table {{ width: 100%; border: none; margin-bottom: 20px; }}
-            table {{ width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }}
-            th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
-            th {{ background-color: #f5f5f5; font-weight: bold; }}
-            .section-title {{ font-size: 15px; font-weight: bold; color: #fff; background-color: #2196F3; padding: 6px 10px; margin-top: 25px; border-radius: 3px; }}
-            .summary-box {{ background-color: #f9fbfd; border-left: 4px solid #4CAF50; padding: 12px; margin-top: 15px; font-size: 13px; text-align: center; }}
-        </style>
-        </head>
-        <body onload="window.print()">
-            <div class="title-container">
-                {logo_html}
-                <div class="title">ÖĞRENCİ AKADEMİK PROFİL RAPORU</div>
-                <div class="subtitle">Sadiye ve Abdullah Tan Ortaokulu - Not ve Ödev Gelişim Dökümü</div>
-            </div>
-            <table class="kv-table">
-                <tr>
-                    <td style="text-align:left; border:none; font-size:14px;"><b>Öğrenci Adı Soyadı:</b> {secilen_ogrenci}</td>
-                    <td style="text-align:right; border:none; font-size:14px;"><b>Sınıfı:</b> {secilen_sinif} | <b>Rapor Tarihi:</b> {date.today().strftime('%d.%m.%Y')}</td>
-                </tr>
-            </table>
-            <div class="summary-box">
-                <b>Genel Not Ortalaması:</b> {genel_ortalama} / 100 &nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp; <b>Ödev Tamamlama Oranı:</b> % {odev_orani}
-            </div>
-            <div class="section-title">📊 Branş Bazlı Not Durumu</div>
-            {df_html_notlar}
-            <div class="section-title">📚 Ödev Dağılım İstatistikleri</div>
-            {html_odev_grafikleri}
-            <div class="section-title">📝 Ödev Sorumluluk Listesi</div>
-            {df_html_odevler}
-        </body>
-        </html>
-        """
-        st.divider()
-        st.write("#### 💾 Öğrenci Profil Raporunu Dışa Aktar")
-        st.download_button(
-            label="📄 Profil Raporunu PDF İndir",
-            data=profil_pdf_html,
-            file_name=f"{secilen_ogrenci}_Profil_Raporu.html",
-            mime="text/html"
-        )
+            st.divider()
+            st.write("#### 💾 Öğrenci Profil Raporunu Dışa Aktar")
+            st.download_button(
+                label="📄 Profil Raporunu PDF İndir",
+                data=profil_pdf_html,
+                file_name=f"{secilen_ogrenci}_Profil_Raporu.html",
+                mime="text/html"
+            )
 
 # --- MODÜL 3: NOT TAKİP ---
 elif menu == "Not Takip":
@@ -484,39 +471,28 @@ elif menu == "Not Takip":
         )
         
         if st.button("Notları Veri Tabanına Kaydet", type="primary"):
-            try:
-                for index, row in duzenlenmis_df.iterrows():
-                    kayit_verisi = {
-                        "ogrenci_id": int(row["Öğrenci ID"]),
-                        "brans": secilen_brans,
-                        "sinav_1": float(row["1. Yazılı"]) if pd.notnull(row["1. Yazılı"]) and str(row["1. Yazılı"]).strip() != "" else None,
-                        "sinav_2": float(row["2. Yazılı"]) if pd.notnull(row["2. Yazılı"]) and str(row["2. Yazılı"]).strip() != "" else None,
-                        "perf_1": float(row["1. Performans"]) if pd.notnull(row["1. Performans"]) and str(row["1. Performans"]).strip() != "" else None,
-                        "perf_2": float(row["2. Performans"]) if pd.notnull(row["2. Performans"]) and str(row["2. Performans"]).strip() != "" else None,
-                        "proje": float(row["Proje"]) if pd.notnull(row["Proje"]) and str(row["Proje"]).strip() != "" else None
-                    }
-                    
-                    not_var_mi = any(v is not None for k, v in kayit_verisi.items() if k not in ["ogrenci_id", "brans"])
-                    
-                    if pd.notnull(row["Kayıt ID"]):
-                        if not_var_mi:
-                            supabase.table("notlar").update(kayit_verisi).eq("id", int(row["Kayıt ID"])).execute()
-                        else:
-                            supabase.table("notlar").delete().eq("id", int(row["Kayıt ID"])).execute()
-                    elif not_var_mi:
-                        supabase.table("notlar").insert(kayit_verisi).execute()
-                st.success("✅ Notlar başarıyla kaydedildi.")
-            except Exception as e:
-                st.error(f"Notlar kaydedilirken hata oluştu: {str(e)}")
-
-        # Dinamik Yönlendirme Alanı
-        st.divider()
-        st.write("#### 👤 Öğrenci Profiline Hızlı Geçiş")
-        hedef_ogr_not = st.selectbox("Profili görüntülenecek öğrenciyi seçin", [o["ad_soyad"] for o in ogrenciler], key="hizli_gecis_not")
-        if st.button("Seçili Öğrencinin Profil Paneline Git"):
-            st.session_state.aktif_menu = "Öğrenci Profil Paneli"
-            st.session_state.profil_sinif_secim = secilen_sinif
-            st.session_state.profil_ogrenci_secim = hedef_ogr_not
+            for index, row in duzenlenmis_df.iterrows():
+                kayit_verisi = {
+                    "ogrenci_id": int(row["Öğrenci ID"]),
+                    "brans": secilen_brans,
+                    "sinav_1": float(row["1. Yazılı"]) if pd.notnull(row["1. Yazılı"]) and str(row["1. Yazılı"]).strip() != "" else None,
+                    "sinav_2": float(row["2. Yazılı"]) if pd.notnull(row["2. Yazılı"]) and str(row["2. Yazılı"]).strip() != "" else None,
+                    "perf_1": float(row["1. Performans"]) if pd.notnull(row["1. Performans"]) and str(row["1. Performans"]).strip() != "" else None,
+                    "perf_2": float(row["2. Performans"]) if pd.notnull(row["2. Performans"]) and str(row["2. Performans"]).strip() != "" else None,
+                    "proje": float(row["Proje"]) if pd.notnull(row["Proje"]) and str(row["Proje"]).strip() != "" else None
+                }
+                
+                not_var_mi = any(v is not None for k, v in kayit_verisi.items() if k not in ["ogrenci_id", "brans"])
+                
+                if pd.notnull(row["Kayıt ID"]):
+                    if not_var_mi:
+                        supabase.table("notlar").update(kayit_verisi).eq("id", int(row["Kayıt ID"])).execute()
+                    else:
+                        supabase.table("notlar").delete().eq("id", int(row["Kayıt ID"])).execute()
+                elif not_var_mi:
+                    supabase.table("notlar").insert(kayit_verisi).execute()
+            
+            st.success("Notlar başarıyla kaydedildi.")
             st.rerun()
 
 # --- MODÜL 4: ÖDEV TAKİP ---
@@ -534,18 +510,15 @@ elif menu == "Ödev Takip":
             submit_odev = st.form_submit_button("Ödevi Sisteme Kaydet")
             
             if submit_odev and odev_adi:
-                try:
-                    supabase.table("odevler").insert({
-                        "brans": secilen_brans,
-                        "sinif": secilen_sinif_odev,
-                        "odev_adi": odev_adi,
-                        "aciklama": odev_aciklama,
-                        "teslim_tarihi": str(teslim_tarihi)
-                    }).execute()
-                    st.success("✅ Ödev başarıyla tanımlandı.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Ödev tanımlanırken hata oluştu: {str(e)}")
+                supabase.table("odevler").insert({
+                    "brans": secilen_brans,
+                    "sinif": secilen_sinif_odev,
+                    "odev_adi": odev_adi,
+                    "aciklama": odev_aciklama,
+                    "teslim_tarihi": str(teslim_tarihi)
+                }).execute()
+                st.success("Ödev başarıyla tanımlandı.")
+                st.rerun()
 
     with tab2:
         secilen_sinif_kontrol = st.selectbox("Sınıf Seçin", sinif_listesi, key="odev_sinif_kontrol")
@@ -561,13 +534,10 @@ elif menu == "Ödev Takip":
             col_d1, col_d2 = st.columns([4, 1])
             with col_d2:
                 if st.button("🗑️ Bu Ödevi Tamamen Sil"):
-                    try:
-                        supabase.table("odev_teslimleri").delete().eq("odev_id", secilen_odev_id).execute()
-                        supabase.table("odevler").delete().eq("id", secilen_odev_id).execute()
-                        st.success("✅ Ödev başarıyla silindi.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Silme işlemi başarısız: {str(e)}")
+                    supabase.table("odev_teslimleri").delete().eq("odev_id", secilen_odev_id).execute()
+                    supabase.table("odevler").delete().eq("id", secilen_odev_id).execute()
+                    st.success("Ödev başarıyla silindi.")
+                    st.rerun()
             
             ogrenciler_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif_kontrol).execute()
             
@@ -610,36 +580,25 @@ elif menu == "Ödev Takip":
                 )
                 
                 if st.button("Değişiklikleri Veri Tabanına Kaydet", type="primary"):
-                    try:
-                        for index, row in duzenlenmis_df.iterrows():
-                            durum = row["Durum"]
-                            not_metni = str(row["Öğretmen Notu"]).strip() if pd.notnull(row["Öğretmen Notu"]) else ""
-                            
-                            if durum != "Değerlendirilmedi":
-                                kayit_verisi = {
-                                    "odev_id": secilen_odev_id,
-                                    "ogrenci_id": int(row["Öğrenci ID"]),
-                                    "durum": durum,
-                                    "ogretmen_notu": not_metni
-                                }
-                                if pd.notnull(row["Kayıt ID"]):
-                                    supabase.table("odev_teslimleri").update({"durum": durum, "ogretmen_notu": not_metni}).eq("id", int(row["Kayıt ID"])).execute()
-                                else:
-                                    supabase.table("odev_teslimleri").insert(kayit_verisi).execute()
-                            elif pd.notnull(row["Kayıt ID"]) and durum == "Değerlendirilmedi":
-                                supabase.table("odev_teslimleri").delete().eq("id", int(row["Kayıt ID"])).execute()
-                        st.success("✅ Ödev durumları güncellendi.")
-                    except Exception as e:
-                        st.error(f"Değerlendirme kaydedilemedi: {str(e)}")
-
-                # Dinamik Yönlendirme Alanı
-                st.divider()
-                st.write("#### 👤 Öğrenci Profiline Hızlı Geçiş")
-                hedef_ogr_odev = st.selectbox("Profili görüntülenecek öğrenciyi seçin", [o["ad_soyad"] for o in ogrenciler], key="hizli_gecis_odev")
-                if st.button("Seçili Öğrencinin Profil Paneline Git", key="btn_odev_hizli"):
-                    st.session_state.aktif_menu = "Öğrenci Profil Paneli"
-                    st.session_state.profil_sinif_secim = secilen_sinif_kontrol
-                    st.session_state.profil_ogrenci_secim = hedef_ogr_odev
+                    for index, row in duzenlenmis_df.iterrows():
+                        durum = row["Durum"]
+                        not_metni = str(row["Öğretmen Notu"]).strip() if pd.notnull(row["Öğretmen Notu"]) else ""
+                        
+                        if durum != "Değerlendirilmedi":
+                            kayit_verisi = {
+                                "odev_id": secilen_odev_id,
+                                "ogrenci_id": int(row["Öğrenci ID"]),
+                                "durum": durum,
+                                "ogretmen_notu": not_metni
+                            }
+                            if pd.notnull(row["Kayıt ID"]):
+                                supabase.table("odev_teslimleri").update({"durum": durum, "ogretmen_notu": not_metni}).eq("id", int(row["Kayıt ID"])).execute()
+                            else:
+                                supabase.table("odev_teslimleri").insert(kayit_verisi).execute()
+                        elif pd.notnull(row["Kayıt ID"]) and durum == "Değerlendirilmedi":
+                            supabase.table("odev_teslimleri").delete().eq("id", int(row["Kayıt ID"])).execute()
+                    
+                    st.success("Ödev durumları güncellendi.")
                     st.rerun()
 
     with tab3:
@@ -759,12 +718,9 @@ elif menu == "LGS Takip":
                         col_del1, col_del2 = st.columns([4, 1])
                         with col_del2:
                             if st.button("🗑️ Bu Sınavı Tamamen Sil"):
-                                try:
-                                    supabase.table("lgs_denemeleri").delete().eq("deneme_adi", deneme_adi).in_("ogrenci_id", ogr_idler).execute()
-                                    st.success(f"✅ '{deneme_adi}' sınavına ait tüm kayıtlar silindi.")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Sınav silinirken hata oluştu: {str(e)}")
+                                supabase.table("lgs_denemeleri").delete().eq("deneme_adi", deneme_adi).in_("ogrenci_id", ogr_idler).execute()
+                                st.success(f"'{deneme_adi}' sınavına ait tüm kayıtlar silindi.")
+                                st.rerun()
                         
                         deneme_verileri_res = supabase.table("lgs_denemeleri").select("*").eq("deneme_adi", deneme_adi).in_("ogrenci_id", ogr_idler).execute()
                         mevcut_veriler = {d["ogrenci_id"]: d for d in deneme_verileri_res.data}
@@ -822,27 +778,24 @@ elif menu == "LGS Takip":
                                     break
                             
                             if not hata_var_mi:
-                                try:
-                                    for index, row in duzenlenmis_lgs_df.iterrows():
-                                        kayit_paketi = {
-                                            "ogrenci_id": int(row["Öğrenci ID"]), "deneme_adi": deneme_adi,
-                                            "turkce_d": int(row["Türkçe D"]), "turkce_y": int(row["Türkçe Y"]),
-                                            "mat_d": int(row["Matematik D"]), "mat_y": int(row["Matematik Y"]),
-                                            "fen_d": int(row["Fen D"]), "fen_y": int(row["Fen Y"]),
-                                            "ink_d": int(row["İnkılap D"]), "ink_y": int(row["İnkılap Y"]),
-                                            "din_d": int(row["Din D"]), "din_y": int(row["Din Y"]),
-                                            "ing_d": int(row["İngilizce D"]), "ing_y": int(row["İngilizce Y"]),
-                                            "lgs_puani": float(row["LGS Puanı"]) if pd.notnull(row["LGS Puanı"]) else 200.0
-                                        }
-                                        k_id = row.get("Kayıt ID")
-                                        if pd.notnull(k_id):
-                                            supabase.table("lgs_denemeleri").update(kayit_paketi).eq("id", int(k_id)).execute()
-                                        else:
-                                            supabase.table("lgs_denemeleri").insert(kayit_paketi).execute()
-                                    st.success("✅ Veriler başarıyla veri tabanına işlendi.")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Sınav verileri işlenirken hata oluştu: {str(e)}")
+                                for index, row in duzenlenmis_lgs_df.iterrows():
+                                    kayit_paketi = {
+                                        "ogrenci_id": int(row["Öğrenci ID"]), "deneme_adi": deneme_adi,
+                                        "turkce_d": int(row["Türkçe D"]), "turkce_y": int(row["Türkçe Y"]),
+                                        "mat_d": int(row["Matematik D"]), "mat_y": int(row["Matematik Y"]),
+                                        "fen_d": int(row["Fen D"]), "fen_y": int(row["Fen Y"]),
+                                        "ink_d": int(row["İnkılap D"]), "ink_y": int(row["İnkılap Y"]),
+                                        "din_d": int(row["Din D"]), "din_y": int(row["Din Y"]),
+                                        "ing_d": int(row["İngilizce D"]), "ing_y": int(row["İngilizce Y"]),
+                                        "lgs_puani": float(row["LGS Puanı"]) if pd.notnull(row["LGS Puanı"]) else 200.0
+                                    }
+                                    k_id = row.get("Kayıt ID")
+                                    if pd.notnull(k_id):
+                                        supabase.table("lgs_denemeleri").update(kayit_paketi).eq("id", int(k_id)).execute()
+                                    else:
+                                        supabase.table("lgs_denemeleri").insert(kayit_paketi).execute()
+                                st.success("Veriler başarıyla veri tabanına işlendi.")
+                                st.rerun()
 
             # --- LGS TAB 2: SINIF GENEL SIRALAMASI MATRİSİ ---
             with tab_lgs2:
@@ -933,12 +886,14 @@ elif menu == "LGS Takip":
                     
                     sub_tab1, sub_tab2 = st.tabs(["📊 Genel Süreç Analiz Raporu", "⚖️ Gelişmiş Sınav Karşılaştırma (Kafa Kafaya)"])
                     
+                    # --- YENİ: KURAL TABANLI PEDAGOJİK YORUMLAMA MODÜLÜ ---
                     with sub_tab1:
                         col_m1, col_m2, col_m3 = st.columns(3)
                         col_m1.metric("Son Sınav Puanı", f"{son_deneme_verisi['lgs_puani']:.2f} Puan")
                         col_m2.metric("Süreç Puan Ortalaması", f"{ortalama_puan} Puan")
                         col_m3.metric("Ulaşılan En Yüksek Puan", f"{en_yuksek_puan} Puan")
                         
+                        # Dinamik Yorum Üretimi
                         isabet_yorumu = ""
                         if isabet_orani >= 85:
                             isabet_yorumu = "Öğrenci konu bütünlüğüne hakimdir. İşlem veya okuma hatası minimum düzeydedir. Deneme pratiği aynı rutinde sürdürülmelidir."
@@ -947,6 +902,7 @@ elif menu == "LGS Takip":
                         else:
                             isabet_yorumu = "Kritik seviye. Rastgele işaretleme davranışı tespit edilmiştir veya konunun temel kazanımları oturmamıştır. Konu anlatım süreçlerine geri dönülmelidir."
 
+                        # Erken Uyarı Risk Algoritması
                         risk_metinleri = []
                         if isabet_orani < 65:
                             risk_metinleri.append(f"Genel isabet oranı (%{isabet_orani:.1f}) kritik seviyededir.")
@@ -956,12 +912,14 @@ elif menu == "LGS Takip":
                         if risk_metinleri:
                             st.error(f"⚠️ **KRİTİK AKADEMİK RİSK UYARISI:** {' '.join(risk_metinleri)}")
 
+                        # 1. Aşama: Kavramsal Çerçeve
                         st.write("#### 📖 Kavramsal Çerçeve (Metrik Tanımları)")
                         st.info("""
                         * **İsabet Oranı (Emin Olma Yüzdesi):** Doğru yapılan soru sayısının, toplam işaretlenen soru sayısına oranıdır. Öğrencinin bilmediği sorularda boş bırakma stratejisi geliştirebilme veya gereksiz risk alarak net kaybetme durumunu ölçer. Hedef %85 üzeridir.
                         * **Performans Tutarlılığı (Standart Sapma):** Sınavlar arasındaki net değişim aralığıdır. Düşük sapma bilgilerin kalıcı olarak öğrenildiğini; yüksek sapma ise performansın soru tipine veya sınav zorluğuna göre istikrarsızlaştığını gösterir.
                         """)
 
+                        # 2. Aşama: Dinamik Teşhis Çıktısı
                         st.write("#### 🔍 Öğrenciye Özel Dinamik Teşhis Raporu")
                         st.markdown(f"**🎯 Sınav İsabet Oranı:** `%{isabet_orani:.1f}`")
                         st.write(f"**Analiz Sonucu:** {isabet_yorumu}")
@@ -1133,6 +1091,7 @@ elif menu == "LGS Takip":
                     
                     pdf_ivme_metinleri = "<ul>" + "".join(ivme_liste).replace(":green[","<span style='color:green;font-weight:bold;'>").replace(":red[","<span style='color:red;font-weight:bold;'>").replace("]","</span>") + "</ul>" if len(df_lgs) >= 3 else "<p>Yetersiz veri.</p>"
                     
+                    # Risk Kutusunu PDF'e de yansıt
                     pdf_risk_html = ""
                     if risk_metinleri:
                         pdf_risk_html = f"""
@@ -1206,15 +1165,6 @@ elif menu == "LGS Takip":
                         file_name=f"{secilen_ogr_analiz}_LGS_Akademik_Raporu.html",
                         mime="text/html"
                     )
-                
-                # Dinamik Yönlendirme Alanı (LGS)
-                st.divider()
-                st.write("#### 👤 Öğrenci Profiline Hızlı Geçiş")
-                if st.button(f"'{secilen_ogr_analiz}' Adlı Öğrencinin Profil Paneline Git"):
-                    st.session_state.aktif_menu = "Öğrenci Profil Paneli"
-                    st.session_state.profil_sinif_secim = secilen_sinif_lgs
-                    st.session_state.profil_ogrenci_secim = secilen_ogr_analiz
-                    st.rerun()
 
 # --- MODÜL 6: ŞİFRE İŞLEMLERİ (SADECE ADMİN) ---
 elif menu == "🔑 Şifre İşlemleri":
@@ -1237,17 +1187,14 @@ elif menu == "🔑 Şifre İşlemleri":
             
             if st.form_submit_button("Şifreyi Güncelle", type="primary"):
                 if not yeni_sifre or not yeni_sifre_tekrar:
-                    st.warning("Şifre alanları boş bırakılamaz.")
+                    st.error("Şifre alanları boş bırakılamaz.")
                 elif yeni_sifre != yeni_sifre_tekrar:
                     st.error("Girdiğiniz şifreler eşleşmiyor.")
                 elif len(yeni_sifre) < 6:
-                    st.warning("Güvenlik gereği şifre en az 6 karakter olmalıdır.")
+                    st.error("Güvenlik gereği şifre en az 6 karakter olmalıdır.")
                 else:
-                    try:
-                        supabase.table("kullanicilar").update({"sifre": yeni_sifre}).eq("kullanici_adi", secili_k_adi).execute()
-                        st.success(f"✅ '{secili_k_adi}' kullanıcısının şifresi başarıyla güncellendi.")
-                    except Exception as e:
-                        st.error(f"Şifre güncellenirken hata oluştu: {str(e)}")
+                    supabase.table("kullanicilar").update({"sifre": yeni_sifre}).eq("kullanici_adi", secili_k_adi).execute()
+                    st.success(f"'{secili_k_adi}' kullanıcısının şifresi başarıyla güncellendi.")
 
 # --- MODÜL 7: TEST VERİSİ MODÜLÜ (SADECE ADMİN) ---
 elif menu == "🛠️ Test Verisi Modülü":
@@ -1261,101 +1208,95 @@ elif menu == "🛠️ Test Verisi Modülü":
             isim_havuzu = ["Ahmet Yılmaz", "Ayşe Kaya", "Mehmet Demir", "Fatma Çelik", "Ali Can", "Zeynep Şahin", "Mustafa Yıldız", "Elif Özdemir", "Hasan Aydın", "Hatice Arslan"]
             durumlar = ["Yaptı", "Yarım", "Yapmadı", "Gelmedi"]
 
-            try:
-                with st.spinner("Sistem tohumlanıyor (Seeding)... Lütfen bekleyin."):
-                    ogrenciler_data = []
-                    for sinif in sinif_listesi:
-                        secilenler = random.sample(isim_havuzu, 5)
-                        for isim in secilenler:
-                            ogrenciler_data.append({"ad_soyad": f"{isim} (Test)", "sinif": sinif})
-                    res_ogr = supabase.table("ogrenciler").insert(ogrenciler_data).execute()
+            with st.spinner("Sistem tohumlanıyor (Seeding)... Lütfen bekleyin."):
+                ogrenciler_data = []
+                for sinif in sinif_listesi:
+                    secilenler = random.sample(isim_havuzu, 5)
+                    for isim in secilenler:
+                        ogrenciler_data.append({"ad_soyad": f"{isim} (Test)", "sinif": sinif})
+                res_ogr = supabase.table("ogrenciler").insert(ogrenciler_data).execute()
 
-                    notlar_data = []
-                    lgs_data = []
-                    ogr_sinif_map = {ogr['id']: ogr['sinif'] for ogr in res_ogr.data}
+                notlar_data = []
+                lgs_data = []
+                ogr_sinif_map = {ogr['id']: ogr['sinif'] for ogr in res_ogr.data}
 
-                    for ogr_id, sinif in ogr_sinif_map.items():
-                        for brans in branslar:
-                            notlar_data.append({
-                                "ogrenci_id": ogr_id, "brans": brans,
-                                "sinav_1": random.randint(40, 100), "sinav_2": random.randint(40, 100),
-                                "perf_1": random.randint(50, 100), "perf_2": random.randint(50, 100),
-                                "proje": random.randint(70, 100)
+                for ogr_id, sinif in ogr_sinif_map.items():
+                    for brans in branslar:
+                        notlar_data.append({
+                            "ogrenci_id": ogr_id, "brans": brans,
+                            "sinav_1": random.randint(40, 100), "sinav_2": random.randint(40, 100),
+                            "perf_1": random.randint(50, 100), "perf_2": random.randint(50, 100),
+                            "proje": random.randint(70, 100)
+                        })
+                    if sinif == "8-A":
+                        for i in range(1, 9): 
+                            t_d, t_y = random.randint(12, 19), random.randint(0, 5)
+                            m_d, m_y = random.randint(6, 15), random.randint(0, 8)
+                            f_d, f_y = random.randint(12, 18), random.randint(0, 5)
+                            i_d, i_y = random.randint(6, 10), random.randint(0, 3)
+                            d_d, d_y = random.randint(7, 10), random.randint(0, 2)
+                            ing_d, ing_y = random.randint(6, 10), random.randint(0, 3)
+                            
+                            t_n = t_d - (t_y / 3)
+                            m_n = m_d - (m_y / 3)
+                            f_n = f_d - (f_y / 3)
+                            i_n = i_d - (i_y / 3)
+                            d_n = d_d - (d_y / 3)
+                            ing_n = ing_d - (ing_y / 3)
+                            
+                            puan_hesap = 200 + (t_n * 4.2) + (m_n * 4.2) + (f_n * 4.2) + (i_n * 1.6) + (d_n * 1.6) + (ing_n * 1.6)
+                            
+                            lgs_data.append({
+                                "ogrenci_id": ogr_id, "deneme_adi": f"Deneme {i}",
+                                "turkce_d": t_d, "turkce_y": t_y, "mat_d": m_d, "mat_y": m_y,
+                                "fen_d": f_d, "fen_y": f_y, "ink_d": i_d, "ink_y": i_y,
+                                "din_d": d_d, "din_y": d_y, "ing_d": ing_d, "ing_y": ing_y,
+                                "lgs_puani": round(float(puan_hesap), 2)
                             })
-                        if sinif == "8-A":
-                            for i in range(1, 9): 
-                                t_d, t_y = random.randint(12, 19), random.randint(0, 5)
-                                m_d, m_y = random.randint(6, 15), random.randint(0, 8)
-                                f_d, f_y = random.randint(12, 18), random.randint(0, 5)
-                                i_d, i_y = random.randint(6, 10), random.randint(0, 3)
-                                d_d, d_y = random.randint(7, 10), random.randint(0, 2)
-                                ing_d, ing_y = random.randint(6, 10), random.randint(0, 3)
-                                
-                                t_n = t_d - (t_y / 3)
-                                m_n = m_d - (m_y / 3)
-                                f_n = f_d - (f_y / 3)
-                                i_n = i_d - (i_y / 3)
-                                d_n = d_d - (d_y / 3)
-                                ing_n = ing_d - (ing_y / 3)
-                                
-                                puan_hesap = 200 + (t_n * 4.2) + (m_n * 4.2) + (f_n * 4.2) + (i_n * 1.6) + (d_n * 1.6) + (ing_n * 1.6)
-                                
-                                lgs_data.append({
-                                    "ogrenci_id": ogr_id, "deneme_adi": f"Deneme {i}",
-                                    "turkce_d": t_d, "turkce_y": t_y, "mat_d": m_d, "mat_y": m_y,
-                                    "fen_d": f_d, "fen_y": f_y, "ink_d": i_d, "ink_y": i_y,
-                                    "din_d": d_d, "din_y": d_y, "ing_d": ing_d, "ing_y": ing_y,
-                                    "lgs_puani": round(float(puan_hesap), 2)
-                                })
 
-                    supabase.table("notlar").insert(notlar_data).execute()
-                    if lgs_data:
-                        supabase.table("lgs_denemeleri").insert(lgs_data).execute()
+                supabase.table("notlar").insert(notlar_data).execute()
+                if lgs_data:
+                    supabase.table("lgs_denemeleri").insert(lgs_data).execute()
 
-                    odevler_data = []
-                    for sinif in sinif_listesi:
-                        for brans in branslar:
-                            for i in range(1, 4):
-                                odevler_data.append({
-                                    "brans": brans, "sinif": sinif, "odev_adi": f"Test Ödevi {i}",
-                                    "aciklama": "Otomatik oluşturuldu.", "teslim_tarihi": str(date.today() - timedelta(days=random.randint(1, 15)))
-                                })
-                    res_odev = supabase.table("odevler").insert(odevler_data).execute()
-
-                    teslimler_data = []
-                    for odev in res_odev.data:
-                        helpful_students = [k for k, v in ogr_sinif_map.items() if v == odev['sinif']]
-                        for ogr_id in helpful_students:
-                            teslimler_data.append({
-                                "odev_id": odev['id'], "ogrenci_id": ogr_id, "durum": random.choice(durumlar), "ogretmen_notu": "Test notu."
+                odevler_data = []
+                for sinif in sinif_listesi:
+                    for brans in branslar:
+                        for i in range(1, 4):
+                            odevler_data.append({
+                                "brans": brans, "sinif": sinif, "odev_adi": f"Test Ödevi {i}",
+                                "aciklama": "Otomatik oluşturuldu.", "teslim_tarihi": str(date.today() - timedelta(days=random.randint(1, 15)))
                             })
-                    
-                    chunk_size = 500
-                    for i in range(0, len(teslimler_data), chunk_size):
-                        supabase.table("odev_teslimleri").insert(teslimler_data[i:i+chunk_size]).execute()
+                res_odev = supabase.table("odevler").insert(odevler_data).execute()
 
-                st.success("✅ Test verileri başarıyla oluşturuldu ve veritabanına eklendi!")
-            except Exception as e:
-                st.error(f"Test verisi yüklenirken hata oluştu: {str(e)}")
+                teslimler_data = []
+                for odev in res_odev.data:
+                    helpful_students = [k for k, v in ogr_sinif_map.items() if v == odev['sinif']]
+                    for ogr_id in helpful_students:
+                        teslimler_data.append({
+                            "odev_id": odev['id'], "ogrenci_id": ogr_id, "durum": random.choice(durumlar), "ogretmen_notu": "Test notu."
+                        })
+                
+                chunk_size = 500
+                for i in range(0, len(teslimler_data), chunk_size):
+                    supabase.table("odev_teslimleri").insert(teslimler_data[i:i+chunk_size]).execute()
+
+            st.success("Test verileri başarıyla oluşturuldu ve veritabanına eklendi!")
 
     with col_test2:
         if st.button("🗑️ Tüm Test Verilerini Temizle", type="secondary", use_container_width=True):
-            try:
-                with st.spinner("Gerçek verileriniz korunuyor, sadece test verileri temizleniyor..."):
-                    res_test_ogr = supabase.table("ogrenciler").select("id").like("ad_soyad", "%(Test)%").execute()
-                    if res_test_ogr.data:
-                        test_ogr_ids = [row["id"] for row in res_test_ogr.data]
-                        supabase.table("notlar").delete().in_("ogrenci_id", test_ogr_ids).execute()
-                        supabase.table("odev_teslimleri").delete().in_("ogrenci_id", test_ogr_ids).execute()
-                        supabase.table("lgs_denemeleri").delete().in_("ogrenci_id", test_ogr_ids).execute()
-                        supabase.table("ogrenciler").delete().in_("id", test_ogr_ids).execute()
-                    
-                    res_test_odev = supabase.table("odevler").select("id").like("odev_adi", "%Test Ödevi%").execute()
-                    if res_test_odev.data:
-                        test_odev_ids = [row["id"] for row in res_test_odev.data]
-                        supabase.table("odev_teslimleri").delete().in_("odev_id", test_odev_ids).execute()
-                        supabase.table("odevler").delete().in_("id", test_odev_ids).execute()
-                    
-                st.success("✅ Test verilerinin tamamı sistemden kalıcı olarak temizlendi.")
-            except Exception as e:
-                st.error(f"Test verileri temizlenirken hata oluştu: {str(e)}")
+            with st.spinner("Gerçek verileriniz korunuyor, sadece test verileri temizleniyor..."):
+                res_test_ogr = supabase.table("ogrenciler").select("id").like("ad_soyad", "%(Test)%").execute()
+                if res_test_ogr.data:
+                    test_ogr_ids = [row["id"] for row in res_test_ogr.data]
+                    supabase.table("notlar").delete().in_("ogrenci_id", test_ogr_ids).execute()
+                    supabase.table("odev_teslimleri").delete().in_("ogrenci_id", test_ogr_ids).execute()
+                    supabase.table("lgs_denemeleri").delete().in_("ogrenci_id", test_ogr_ids).execute()
+                    supabase.table("ogrenciler").delete().in_("id", test_ogr_ids).execute()
+                
+                res_test_odev = supabase.table("odevler").select("id").like("odev_adi", "%Test Ödevi%").execute()
+                if res_test_odev.data:
+                    test_odev_ids = [row["id"] for row in res_test_odev.data]
+                    supabase.table("odev_teslimleri").delete().in_("odev_id", test_odev_ids).execute()
+                    supabase.table("odevler").delete().in_("id", test_odev_ids).execute()
+                
+            st.success("Test verilerinin tamamı sistemden kalıcı olarak temizlendi.")
