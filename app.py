@@ -7,31 +7,57 @@ import matplotlib.pyplot as plt
 import io
 import base64
 import random
+import os
 
 # Sayfa Ayarları (Streamlit'te her zaman en üstte olmalıdır)
-st.set_page_config(page_title="Okul Takip Sistemi", layout="wide")
+st.set_page_config(page_title="Sadiye ve Abdullah Tan Ortaokulu", page_icon="🎓", layout="wide")
 
-# --- OTURUM (LOGIN) YÖNETİMİ ---
+# --- OTURUM (LOGIN) YÖNETİMİ VE KARŞILAMA EKRANI ---
 if "giris_yapildi" not in st.session_state:
     st.session_state.giris_yapildi = False
 
 if not st.session_state.giris_yapildi:
-    col1, col2, col3 = st.columns([1, 1, 1])
+    # Karşılama Alanı Konteyneri
+    with st.container():
+        col_logo, col_baslik = st.columns([1, 6])
+        
+        with col_logo:
+            if os.path.exists("logo.png"):
+                st.image("logo.png", width=120)
+            else:
+                st.write("🏢") 
+        
+        with col_baslik:
+            st.title("🎓 Sadiye ve Abdullah Tan Ortaokulu")
+            st.subheader("Okul Takip Paneline Hoşgeldiniz")
+            st.markdown("""
+            Bu panel, okul yönetim sürecini dijitalleştirerek öğretmen ve velilerimiz için veri odaklı 
+            bir takip mekanizması sunar. Panel üzerinden aşağıdaki işlemleri gerçekleştirebilirsiniz:
+            
+            * **Öğrenci Yönetimi:** Öğrenci kayıtlarını sınıf bazlı oluşturabilir ve yönetebilirsiniz.
+            * **Akademik Takip:** Not girişlerini yapabilir, branş bazlı ortalamaları izleyebilir ve PDF profil raporları alabilirsiniz.
+            * **Ödev Süreçleri:** Ödev tanımlayabilir, teslim durumlarını puanlayabilir ve detaylı istatistikler tutabilirsiniz.
+            * **LGS Hazırlık (8. Sınıflar):** Deneme sınavı sonuçlarını girebilir, sınıf sıralamalarını görebilir ve sınavları 'Kafa Kafaya' analiz dökümleriyle kıyaslayabilirsiniz.
+            """)
+    
+    st.divider()
+    
+    col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        st.title("🔐 Sisteme Giriş")
-        st.write("Lütfen yetkili kullanıcı bilgilerinizi girin.")
+        st.write("#### 🔐 Yetkili Girişi")
+        st.write("Devam etmek için lütfen kullanıcı bilgilerinizi girin.")
         
         with st.form("giris_formu"):
             k_adi = st.text_input("Kullanıcı Adı")
             sifre = st.text_input("Şifre", type="password")
-            giris_butonu = st.form_submit_button("Giriş Yap", use_container_width=True)
+            giris_butonu = st.form_submit_button("Sisteme Giriş Yap", use_container_width=True)
             
             if giris_butonu:
                 if k_adi == "admin" and sifre == "123456":
                     st.session_state.giris_yapildi = True
                     st.rerun()
                 else:
-                    st.error("Hatalı kullanıcı adı veya şifre.")
+                    st.error("❌ Hatalı kullanıcı adı veya şifre.")
     st.stop() 
 
 # --- GİRİŞ BAŞARILIYSA AŞAĞIDAKİ KODLAR ÇALIŞIR ---
@@ -43,6 +69,14 @@ def init_connection():
     return create_client(url, key)
 
 supabase: Client = init_connection()
+
+# --- Üst Bar (Başlık + Sağ Üst Logo) ---
+top_col1, top_col2 = st.columns([8, 1])
+with top_col1:
+    st.title("🚀 Okul Takip Sistemi")
+with top_col2:
+    if os.path.exists("logo.png"):
+        st.image("logo.png", width=80)
 
 if st.sidebar.button("🚪 Çıkış Yap", use_container_width=True):
     st.session_state.giris_yapildi = False
