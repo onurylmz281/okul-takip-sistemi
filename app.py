@@ -29,18 +29,6 @@ supabase: Client = init_connection()
 branslar = ["Matematik", "Türkçe", "Fen Bilimleri", "Sosyal Bilgiler", "İngilizce", "Din Kültürü", "İnkılap Tarihi"]
 sinif_listesi = ["5-A", "6-A", "7-A", "8-A"]
 
-# Rol ve Kullanıcı Veritabanı (RBAC)
-KULLANICILAR = {
-    "admin": {"sifre": "123456", "rol": "admin", "brans": "Tümü"},
-    "matematik": {"sifre": "123456", "rol": "ogretmen", "brans": "Matematik"},
-    "turkce": {"sifre": "123456", "rol": "ogretmen", "brans": "Türkçe"},
-    "fen": {"sifre": "123456", "rol": "ogretmen", "brans": "Fen Bilimleri"},
-    "sosyal": {"sifre": "123456", "rol": "ogretmen", "brans": "Sosyal Bilgiler"},
-    "ingilizce": {"sifre": "123456", "rol": "ogretmen", "brans": "İngilizce"},
-    "din": {"sifre": "123456", "rol": "ogretmen", "brans": "Din Kültürü"},
-    "inkilap": {"sifre": "123456", "rol": "ogretmen", "brans": "İnkılap Tarihi"}
-}
-
 def get_base64_logo():
     if os.path.exists("logo.png"):
         with open("logo.png", "rb") as f:
@@ -57,7 +45,7 @@ if "giris_yapildi" not in st.session_state:
     st.session_state.rol = None
     st.session_state.brans = None
 
-# --- 5. GİRİŞ EKRANI (WELCOME PAGE) ---
+# --- 5. GİRİŞ EKRANI (WELCOME PAGE - VERİ TABANI BAĞLANTILI) ---
 if not st.session_state.giris_yapildi:
     with st.container():
         col_logo, col_baslik = st.columns([1, 6])
@@ -77,7 +65,7 @@ if not st.session_state.giris_yapildi:
             * **Öğrenci Yönetimi:** Öğrenci kayıtlarını sınıf bazlı oluşturabilir ve toplu yönetebilirsiniz (Sadece Yönetici).
             * **Akademik Takip:** Not girişlerini yapabilir, branş bazlı ortalamaları izleyebilir ve PDF profil raporları alabilirsiniz.
             * **Ödev Süreçleri:** Ödev tanımlayabilir, teslim durumlarını puanlayabilir ve detaylı istatistikler tutabilirsiniz.
-            * **LGS Hazırlık (8. Sınıflar):** Deneme sınavı sonuçlarını girebilir, sınıf sıralamalarını görebilir ve sınavları 'Kafa Kafaya' analiz dökümleriyle kıyaslayabilirsiniz.
+            * **LGS Hazırlık (8. Sınıflar):** Deneme sınavı sonuçlarını girebilir, sınıf sıralamalarını görebilir ve sınavları analiz edebilirsiniz.
             """)
     
     st.divider()
@@ -93,13 +81,22 @@ if not st.session_state.giris_yapildi:
             giris_butonu = st.form_submit_button("Sisteme Giriş Yap", use_container_width=True)
             
             if giris_butonu:
-                if k_adi in KULLANICILAR and KULLANICILAR[k_adi]["sifre"] == sifre:
-                    st.session_state.giris_yapildi = True
-                    st.session_state.rol = KULLANICILAR[k_adi]["rol"]
-                    st.session_state.brans = KULLANICILAR[k_adi]["brans"]
-                    st.rerun()
-                else:
-                    st.error("❌ Hatalı kullanıcı adı veya şifre.")
+                try:
+                    # Sabit kod yerine, doğrudan veritabanından kullanıcı doğrulama
+                    res = supabase.table("kullanicilar").select("*").eq("kullanici_adi", k_adi).execute()
+                    
+                    if res.data and len(res.data) > 0:
+                        if res.data[0]["sifre"] == sifre:
+                            st.session_state.giris_yapildi = True
+                            st.session_state.rol = res.data[0]["rol"]
+                            st.session_state.brans = res.data[0]["brans"]
+                            st.rerun()
+                        else:
+                            st.error("❌ Hatalı şifre girdiniz.")
+                    else:
+                        st.error("❌ Sistemde böyle bir kullanıcı bulunamadı.")
+                except Exception as e:
+                    st.error("Bağlantı hatası: Lütfen 1. Adımdaki 'kullanicilar' tablosunun oluşturulduğundan emin olun.")
     st.stop() 
 
 # --- 6. ANA UYGULAMA PANELİ ---
@@ -121,10 +118,10 @@ if st.sidebar.button("🚪 Güvenli Çıkış", use_container_width=True):
 
 st.sidebar.divider()
 
-# Branş Kısıtlaması (Rol Bazlı)
+# Branş Kısıtlaması (Rol Bazlı Menü Yönetimi)
 if st.session_state.rol == "admin":
     secilen_brans = st.sidebar.selectbox("İşlem Yapılacak Branş", branslar)
-    moduller = ["Öğrenci Yönetimi", "Öğrenci Profil Paneli", "Not Takip", "Ödev Takip", "LGS Takip", "🛠️ Test Verisi Üret"]
+    moduller = ["Öğrenci Yönetimi", "Öğrenci Profil Paneli", "Not Takip", "Ödev Takip", "LGS Takip", "🔑 Şifre İşlemleri", "🛠️ Test Verisi Üret"]
 else:
     st.sidebar.success(f"Aktif Branş: {st.session_state.brans}")
     secilen_brans = st.session_state.brans
@@ -274,6 +271,8 @@ elif menu == "Öğrenci Profil Paneli":
                 with col_grafik:
                     if not df_filtered_odev.empty:
                         color_map = {"Yaptı": "#4CAF50", "Yarım": "#FFC107", "Yapmadı": "#F44336", "Gelmedi": "#9E9E9E"}
+                        
+                        st.write("**Genel Ödev Dağılımı (Filtrelenmiş Veri)**")
                         status_counts_genel = df_filtered_odev["Durum"].value_counts()
                         current_colors_genel = [color_map.get(idx_name, "#2196F3") for idx_name in status_counts_genel.index]
                         
@@ -284,7 +283,6 @@ elif menu == "Öğrenci Profil Paneli":
                         )
                         plt.setp(autotexts, size=8, weight="bold")
                         plt.setp(texts, size=9)
-                        st.write("**Genel Ödev Dağılımı**")
                         st.pyplot(fig_genel)
                         
                         buf_genel = io.BytesIO()
@@ -911,7 +909,6 @@ elif menu == "LGS Takip":
                         else:
                             st.write("Son 3 sınav yöneliminin ölçülmesi için en az 3 sınav kaydı bulunmalıdır.")
                         
-                        # --- YENİ: AYRIŞTIRILMIŞ GRAFİKLER ---
                         st.write("#### 📊 Süreç İlerleme Grafikleri")
                         col_g1, col_g2 = st.columns(2)
                         with col_g1:
@@ -1034,8 +1031,6 @@ elif menu == "LGS Takip":
                             st.write("#### 💾 Seçili Sınav Karşılaştırma Dökümünü PDF İndir")
                             st.download_button("📄 Karşılaştırma Raporunu PDF İndir", html_karsilastirma, file_name=f"{secilen_ogr_analiz}_Karsilastirma.html", mime="text/html")
 
-                    # --- GLOBAL SÜREÇ PDF (AYRI GRAFİKLERLE) ---
-                    # Puan Grafiği Üretimi
                     fig_puan, ax_puan = plt.subplots(figsize=(6, 2.5))
                     ax_puan.plot(df_lgs["deneme_adi"], df_lgs["lgs_puani"], marker='o', color='#2196F3', linewidth=2)
                     ax_puan.set_title("LGS Puan Trendi", fontsize=10)
@@ -1046,7 +1041,6 @@ elif menu == "LGS Takip":
                     puan_trend_b64 = base64.b64encode(buf_puan.read()).decode('utf-8')
                     plt.close(fig_puan)
                     
-                    # Net Grafiği Üretimi
                     fig_net, ax_net = plt.subplots(figsize=(6, 2.5))
                     ax_net.plot(df_lgs["deneme_adi"], df_lgs["Toplam Net"], marker='s', color='#4CAF50', linewidth=2)
                     ax_net.set_title("Toplam Net Trendi", fontsize=10)
@@ -1126,7 +1120,37 @@ elif menu == "LGS Takip":
                         mime="text/html"
                     )
 
-# --- MODÜL 6: TEST VERİSİ (SADECE ADMİN) ---
+# --- MODÜL 6: ŞİFRE İŞLEMLERİ (SADECE ADMİN) ---
+elif menu == "🔑 Şifre İşlemleri":
+    st.header("🔑 Şifre Yönetim Paneli")
+    st.info("Sistemdeki tüm yönetici ve öğretmen hesaplarının şifrelerini buradan güncelleyebilirsiniz.")
+    
+    k_res = supabase.table("kullanicilar").select("kullanici_adi, brans, rol").execute()
+    if k_res.data:
+        secenekler = []
+        for k in k_res.data:
+            etiket = f"{k['kullanici_adi']} ({'Yönetici' if k['rol'] == 'admin' else k['brans'] + ' Öğretmeni'})"
+            secenekler.append(etiket)
+            
+        secili_etiket = st.selectbox("Şifresi Değiştirilecek Hesabı Seçin", secenekler)
+        secili_k_adi = secili_etiket.split(" ")[0] 
+        
+        with st.form("sifre_formu", clear_on_submit=True):
+            yeni_sifre = st.text_input("Yeni Şifre", type="password")
+            yeni_sifre_tekrar = st.text_input("Yeni Şifre (Tekrar)", type="password")
+            
+            if st.form_submit_button("Şifreyi Güncelle", type="primary"):
+                if not yeni_sifre or not yeni_sifre_tekrar:
+                    st.error("Şifre alanları boş bırakılamaz.")
+                elif yeni_sifre != yeni_sifre_tekrar:
+                    st.error("Girdiğiniz şifreler eşleşmiyor.")
+                elif len(yeni_sifre) < 6:
+                    st.error("Güvenlik gereği şifre en az 6 karakter olmalıdır.")
+                else:
+                    supabase.table("kullanicilar").update({"sifre": yeni_sifre}).eq("kullanici_adi", secili_k_adi).execute()
+                    st.success(f"'{secili_k_adi}' kullanıcısının şifresi başarıyla güncellendi.")
+
+# --- MODÜL 7: TEST VERİSİ ÜRET (SADECE ADMİN) ---
 elif menu == "🛠️ Test Verisi Üret":
     st.header("Sisteme Rastgele Test Verisi Ekleme")
     st.warning("Bu işlem veritabanınıza rastgele öğrenciler, notlar ve ödevler ekleyecektir.")
