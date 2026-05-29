@@ -117,8 +117,8 @@ if menu == "Öğrenci Yönetimi":
         else:
             st.info("Kayıtlı öğrenci bulunmamaktadır.")
 
-    with tab_sil:
-        st.warning("⚠️ Dikkat: Bir öğrenciyi sildiğinizde, o öğrenciye ait tüm not, ödev ve LGS deneme kayıtları ilişkili tablolardan kalıcı olarak temizlenir.")
+   with tab_sil:
+        st.warning("⚠️ Dikkat: Seçilen öğrencileri sildiğinizde, bu öğrencilere ait tüm not, ödev ve LGS deneme kayıtları ilişkili tablolardan kalıcı olarak temizlenir.")
         secilen_sinif_sil = st.selectbox("Sınıf Seçin", sinif_listesi, key="ogr_sil_sinif")
         ogrenciler_sil_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif_sil).execute()
         
@@ -126,15 +126,25 @@ if menu == "Öğrenci Yönetimi":
             st.info("Bu sınıfta silinecek kayıtlı öğrenci bulunmuyor.")
         else:
             ogr_secenekleri_sil = {ogr["ad_soyad"]: ogr["id"] for ogr in ogrenciler_sil_res.data}
-            silinecek_ogr_adi = st.selectbox("Silinecek Öğrenciyi Seçin", list(ogr_secenekleri_sil.keys()))
-            silinecek_ogr_id = ogr_secenekleri_sil[silinecek_ogr_adi]
             
-            if st.button(f"🗑️ '{silinecek_ogr_adi}' Adlı Öğrenciyi ve Tüm Verilerini Sil", type="primary"):
-                # Zincirleme Veri Temizliği (Cascade)
-                supabase.table("notlar").delete().eq("ogrenci_id", silinecek_ogr_id).execute()
-                supabase.table("odev_teslimleri").delete().eq("ogrenci_id", silinecek_ogr_id).execute()
-                supabase.table("lgs_denemeleri").delete().eq("ogrenci_id", silinecek_ogr_id).execute()
-                supabase.table("ogrenciler").delete().eq("id", silinecek_ogr_id).execute()
+            # YENİ: Toplu seçim aracı
+            silinecek_ogrenciler_ad = st.multiselect("Silinecek Öğrencileri Seçin", list(ogr_secenekleri_sil.keys()))
+            
+            if silinecek_ogrenciler_ad:
+                # Seçilen öğrencilerin ID'lerini bir liste olarak al
+                silinecek_ogr_id_list = [ogr_secenekleri_sil[ad] for ad in silinecek_ogrenciler_ad]
+                
+                if st.button(f"🗑️ Seçili {len(silinecek_ogrenciler_ad)} Öğrenciyi ve Tüm Verilerini Sil", type="primary"):
+                    # YENİ: Toplu Silme Sorguları (.in_ kullanımı)
+                    supabase.table("notlar").delete().in_("ogrenci_id", silinecek_ogr_id_list).execute()
+                    supabase.table("odev_teslimleri").delete().in_("ogrenci_id", silinecek_ogr_id_list).execute()
+                    supabase.table("lgs_denemeleri").delete().in_("ogrenci_id", silinecek_ogr_id_list).execute()
+                    supabase.table("ogrenciler").delete().in_("id", silinecek_ogr_id_list).execute()
+                    
+                    st.success(f"Seçilen {len(silinecek_ogrenciler_ad)} öğrenci ve ilişkili tüm akademik veriler sistemden tamamen silindi.")
+                    st.rerun()
+            else:
+                st.info("Silmek için lütfen listeden en az bir öğrenci seçin.")
                 
                 st.success(f"{silinecek_ogr_adi} ve ilişkili tüm akademik veriler sistemden tamamen silindi.")
                 st.rerun()
