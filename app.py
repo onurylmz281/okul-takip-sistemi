@@ -29,6 +29,17 @@ supabase: Client = init_connection()
 branslar = ["Matematik", "Türkçe", "Fen Bilimleri", "Sosyal/İnkılap", "İngilizce", "Din Kültürü"]
 sinif_listesi = ["5-A", "6-A", "7-A", "8-A"]
 
+# Rol ve Kullanıcı Veritabanı
+KULLANICILAR = {
+    "admin": {"sifre": "123456", "rol": "admin", "brans": "Tümü"},
+    "matematik": {"sifre": "123456", "rol": "ogretmen", "brans": "Matematik"},
+    "turkce": {"sifre": "123456", "rol": "ogretmen", "brans": "Türkçe"},
+    "fen": {"sifre": "123456", "rol": "ogretmen", "brans": "Fen Bilimleri"},
+    "sosyal_inkilap": {"sifre": "123456", "rol": "ogretmen", "brans": "Sosyal/İnkılap"},
+    "ingilizce": {"sifre": "123456", "rol": "ogretmen", "brans": "İngilizce"},
+    "din": {"sifre": "123456", "rol": "ogretmen", "brans": "Din Kültürü"}
+}
+
 def get_base64_logo():
     if os.path.exists("logo.png"):
         with open("logo.png", "rb") as f:
@@ -94,7 +105,7 @@ if not st.session_state.giris_yapildi:
                     else:
                         st.error("❌ Sistemde böyle bir kullanıcı bulunamadı.")
                 except Exception as e:
-                    st.error(f"Sistem Hatası: Veritabanı bağlantısı kurulamadı. Hata Kodu: {str(e)}")
+                    st.error(f"Sistem Hatası: Veritabanı bağlantısı kurulamadı. Detay: {str(e)}")
     st.stop() 
 
 # --- 6. ANA UYGULAMA PANELİ ---
@@ -123,7 +134,6 @@ else:
     moduller = ["Öğrenci Profil Paneli", "Not Takip", "Ödev Takip", "LGS Takip"]
 
 menu = st.sidebar.radio("Modüller", moduller)
-
 
 # --- MODÜL 1: ÖĞRENCİ YÖNETİMİ (SADECE ADMİN) ---
 if menu == "Öğrenci Yönetimi":
@@ -154,13 +164,14 @@ if menu == "Öğrenci Yönetimi":
             else:
                 st.info("Kayıtlı öğrenci bulunmamaktadır.")
         except Exception as e:
-            st.error(f"Liste yüklenemedi: {str(e)}")
+            st.error(f"Öğrenci listesi yüklenemedi: {str(e)}")
 
     with tab_sil:
         st.warning("⚠️ Dikkat: Seçilen öğrencileri sildiğinizde, bu öğrencilere ait tüm not, ödev ve LGS deneme kayıtları ilişkili tablolardan kalıcı olarak temizlenir.")
         secilen_sinif_sil = st.selectbox("Sınıf Seçin", sinif_listesi, key="ogr_sil_sinif")
         try:
             ogrenciler_sil_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif_sil).execute()
+            
             if not ogrenciler_sil_res.data:
                 st.info("Bu sınıfta silinecek kayıtlı öğrenci bulunmuyor.")
             else:
@@ -182,8 +193,7 @@ if menu == "Öğrenci Yönetimi":
                 else:
                     st.info("Silmek için lütfen listeden en az bir öğrenci seçin.")
         except Exception as e:
-            st.error(f"Silme listesi yüklenemedi: {str(e)}")
-
+            st.error(f"Silinecek öğrenci listesi yüklenirken hata oluştu: {str(e)}")
 
 # --- MODÜL 2: ÖĞRENCİ PROFİL PANELİ ---
 elif menu == "Öğrenci Profil Paneli":
@@ -410,8 +420,7 @@ elif menu == "Öğrenci Profil Paneli":
             mime="text/html"
         )
     except Exception as e:
-        st.error(f"Profil verileri yüklenirken hata oluştu: {str(e)}")
-
+        st.error(f"Profil paneli yüklenirken hata oluştu: {str(e)}")
 
 # --- MODÜL 3: NOT TAKİP ---
 elif menu == "Not Takip":
@@ -420,6 +429,7 @@ elif menu == "Not Takip":
     
     try:
         ogrenciler_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif).execute()
+        
         if not ogrenciler_res.data:
             st.warning("Bu sınıfa ait öğrenci kaydı bulunmuyor. Lütfen 'Öğrenci Yönetimi' sekmesinden kayıt ekleyin.")
         else:
@@ -492,8 +502,7 @@ elif menu == "Not Takip":
                 except Exception as e:
                     st.error(f"Notlar kaydedilirken hata oluştu: {str(e)}")
     except Exception as e:
-        st.error(f"Öğrenci listesi yüklenemedi: {str(e)}")
-
+        st.error(f"Öğrenci listesi yüklenirken hata oluştu: {str(e)}")
 
 # --- MODÜL 4: ÖDEV TAKİP ---
 elif menu == "Ödev Takip":
@@ -527,6 +536,7 @@ elif menu == "Ödev Takip":
         secilen_sinif_kontrol = st.selectbox("Sınıf Seçin", sinif_listesi, key="odev_sinif_kontrol")
         try:
             odevler_res = supabase.table("odevler").select("*").eq("sinif", secilen_sinif_kontrol).eq("brans", secilen_brans).execute()
+            
             if not odevler_res.data:
                 st.info("Bu sınıfa ve branşa ait tanımlanmış bir ödev bulunmamaktadır.")
             else:
@@ -606,9 +616,9 @@ elif menu == "Ödev Takip":
                                     supabase.table("odev_teslimleri").delete().eq("id", int(row["Kayıt ID"])).execute()
                             st.success("✅ Ödev durumları güncellendi.")
                         except Exception as e:
-                            st.error(f"Değerlendirme kaydedilemedi: {str(e)}")
+                            st.error(f"Değerlendirme kaydedilirken hata oluştu: {str(e)}")
         except Exception as e:
-            st.error(f"Ödev kayıtları yüklenemedi: {str(e)}")
+            st.error(f"Ödev veya öğrenci verileri yüklenirken hata oluştu: {str(e)}")
 
     with tab3:
         st.write("### Rapor Filtreleme")
@@ -695,6 +705,7 @@ elif menu == "LGS Takip":
         secilen_sinif_lgs = st.selectbox("Sınıf Seçin", sinif_8_listesi, key="lgs_sinif_secim")
         try:
             ogrenciler_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif_lgs).execute()
+            
             if not ogrenciler_res.data:
                 st.warning("Bu sınıfta öğrenci kaydı bulunmuyor.")
             else:
@@ -802,11 +813,13 @@ elif menu == "LGS Takip":
                                         for index, row in duzenlenmis_lgs_df.iterrows():
                                             k_id = row.get("Kayıt ID")
                                             
+                                            # Katılmayan öğrenci mekanizması
                                             if row["Katılım"] == "Girmedi":
                                                 if pd.notnull(k_id):
                                                     supabase.table("lgs_denemeleri").delete().eq("id", int(k_id)).execute()
                                                 continue
                                                 
+                                            # Katılan öğrenci mekanizması
                                             kayit_paketi = {
                                                 "ogrenci_id": int(row["Öğrenci ID"]), "deneme_adi": deneme_adi,
                                                 "turkce_d": int(row["Türkçe D"]), "turkce_y": int(row["Türkçe Y"]),
@@ -915,6 +928,7 @@ elif menu == "LGS Takip":
                         
                         sub_tab1, sub_tab2 = st.tabs(["📊 Genel Süreç Analiz Raporu", "⚖️ Gelişmiş Sınav Karşılaştırma (Kafa Kafaya)"])
                         
+                        # --- KURAL TABANLI PEDAGOJİK YORUMLAMA MODÜLÜ ---
                         with sub_tab1:
                             col_m1, col_m2, col_m3 = st.columns(3)
                             col_m1.metric("Son Sınav Puanı", f"{son_deneme_verisi['lgs_puani']:.2f} Puan")
@@ -1254,6 +1268,7 @@ elif menu == "🛠️ Test Verisi Modülü":
 
                     for ogr_id, sinif in ogr_sinif_map.items():
                         for brans in branslar:
+                            if brans == "Tümü": continue
                             notlar_data.append({
                                 "ogrenci_id": ogr_id, "brans": brans,
                                 "sinav_1": random.randint(40, 100), "sinav_2": random.randint(40, 100),
@@ -1293,6 +1308,7 @@ elif menu == "🛠️ Test Verisi Modülü":
                     odevler_data = []
                     for sinif in sinif_listesi:
                         for brans in branslar:
+                            if brans == "Tümü": continue
                             for i in range(1, 4):
                                 odevler_data.append({
                                     "brans": brans, "sinif": sinif, "odev_adi": f"Test Ödevi {i}",
