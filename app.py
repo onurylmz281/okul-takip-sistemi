@@ -886,23 +886,47 @@ elif menu == "LGS Takip":
                     
                     sub_tab1, sub_tab2 = st.tabs(["📊 Genel Süreç Analiz Raporu", "⚖️ Gelişmiş Sınav Karşılaştırma (Kafa Kafaya)"])
                     
+                    # --- YENİ: KURAL TABANLI PEDAGOJİK YORUMLAMA MODÜLÜ ---
                     with sub_tab1:
                         col_m1, col_m2, col_m3 = st.columns(3)
                         col_m1.metric("Son Sınav Puanı", f"{son_deneme_verisi['lgs_puani']:.2f} Puan")
                         col_m2.metric("Süreç Puan Ortalaması", f"{ortalama_puan} Puan")
                         col_m3.metric("Ulaşılan En Yüksek Puan", f"{en_yuksek_puan} Puan")
                         
-                        st.write("#### 🔍 Gelişmiş Pedagojik Bulgular ve Risk Analizleri")
-                        st.markdown(f"**🎯 Sınav İsabet Oranı (Emin Olma Yüzdesi):** `%{isabet_orani:.1f}`")
-                        st.write("*Anlamı Nedir?* Bu metrik, öğrencinin işaretlediği sorular içindeki net doğruluk kalitesini ölçer. "
-                                 f"Öğrencinin son oranı **%{isabet_orani:.1f}** düzeyindedir. Oranın düşmesi, bilmediği soruları boş bırakmak yerine "
-                                 "gereksiz risk alarak rastgele işaretleme yaptığını ve yanlış sayısıyla net kaybettiğini gösterir. Hedef %85 üzeridir.")
-                        
-                        st.markdown(f"**📉 Standart Sapma (Performans Tutarlılığı ve İstikrar):** En yüksek dalgalanma olan ders: `{en_istikrarsiz_ders}` (Sapma: `{en_sapma_degeri:.2f}`)")
-                        st.write(f"*Anlamı Nedir?* Standart sapma, netlerin sınavlar arasındaki dengesini ölçer. "
-                                 f"En istikrarsız dersi **{en_istikrarsiz_ders}** branşıdır. Bu dersteki dalgalanma, öğrencinin soru tipine veya "
-                                 "sınav zorluğuna göre performansının çok değiştiğini, yani bilgilerin henüz tam olarak pekişmediğini gösterir.")
-                        
+                        # Dinamik Yorum Üretimi
+                        isabet_yorumu = ""
+                        if isabet_orani >= 85:
+                            isabet_yorumu = "Öğrenci konu bütünlüğüne hakimdir. İşlem veya okuma hatası minimum düzeydedir. Deneme pratiği aynı rutinde sürdürülmelidir."
+                        elif isabet_orani >= 65:
+                            isabet_yorumu = "Öğrenci riskli işaretleme yapmaktadır veya spesifik alt kazanımlarda kavram yanılgılarına sahiptir. Yanlış yapılan soruların analiz edilmesi gereklidir."
+                        else:
+                            isabet_yorumu = "Kritik seviye. Rastgele işaretleme davranışı tespit edilmiştir veya konunun temel kazanımları oturmamıştır. Konu anlatım süreçlerine geri dönülmelidir."
+
+                        # Erken Uyarı Risk Algoritması
+                        risk_metinleri = []
+                        if isabet_orani < 65:
+                            risk_metinleri.append(f"Genel isabet oranı (%{isabet_orani:.1f}) kritik seviyededir.")
+                        if en_sapma_degeri >= 2.5:
+                            risk_metinleri.append(f"'{en_istikrarsiz_ders}' dersinde yüksek performans dalgalanması (Sapma: {en_sapma_degeri:.2f}) mevcuttur.")
+
+                        if risk_metinleri:
+                            st.error(f"⚠️ **KRİTİK AKADEMİK RİSK UYARISI:** {' '.join(risk_metinleri)}")
+
+                        # 1. Aşama: Kavramsal Çerçeve
+                        st.write("#### 📖 Kavramsal Çerçeve (Metrik Tanımları)")
+                        st.info("""
+                        * **İsabet Oranı (Emin Olma Yüzdesi):** Doğru yapılan soru sayısının, toplam işaretlenen soru sayısına oranıdır. Öğrencinin bilmediği sorularda boş bırakma stratejisi geliştirebilme veya gereksiz risk alarak net kaybetme durumunu ölçer. Hedef %85 üzeridir.
+                        * **Performans Tutarlılığı (Standart Sapma):** Sınavlar arasındaki net değişim aralığıdır. Düşük sapma bilgilerin kalıcı olarak öğrenildiğini; yüksek sapma ise performansın soru tipine veya sınav zorluğuna göre istikrarsızlaştığını gösterir.
+                        """)
+
+                        # 2. Aşama: Dinamik Teşhis Çıktısı
+                        st.write("#### 🔍 Öğrenciye Özel Dinamik Teşhis Raporu")
+                        st.markdown(f"**🎯 Sınav İsabet Oranı:** `%{isabet_orani:.1f}`")
+                        st.write(f"**Analiz Sonucu:** {isabet_yorumu}")
+
+                        st.markdown(f"**📉 Performans Tutarlılığı:** En yüksek dalgalanma olan ders: `{en_istikrarsiz_ders}`")
+                        st.write("**Analiz Sonucu:** Bu dersteki istikrarsızlık, öğrencinin soru tipine veya sınav zorluğuna göre performansının çok değiştiğini, bilgilerin henüz tam olarak pekişmediğini gösterir.")
+
                         st.markdown("**📈 Branş İvmesi (Son 3 Sınav Yönelimi):**")
                         ivme_liste = []
                         if len(df_lgs) >= 3:
@@ -1066,6 +1090,16 @@ elif menu == "LGS Takip":
                     html_table_lgs = df_pdf_tablo.to_html(border=1, index=False, justify='center')
                     
                     pdf_ivme_metinleri = "<ul>" + "".join(ivme_liste).replace(":green[","<span style='color:green;font-weight:bold;'>").replace(":red[","<span style='color:red;font-weight:bold;'>").replace("]","</span>") + "</ul>" if len(df_lgs) >= 3 else "<p>Yetersiz veri.</p>"
+                    
+                    # Risk Kutusunu PDF'e de yansıt
+                    pdf_risk_html = ""
+                    if risk_metinleri:
+                        pdf_risk_html = f"""
+                        <div style="background-color: #ffebee; border-left: 5px solid #f44336; padding: 15px; margin-bottom: 20px;">
+                            <strong style="color: #f44336; font-size: 14px;">⚠️ KRİTİK AKADEMİK RİSK UYARISI:</strong><br>
+                            <span style="font-size: 13px; color: #333;">{' '.join(risk_metinleri)}</span>
+                        </div>
+                        """
 
                     lgs_pdf_html = f"""
                     <html>
@@ -1093,6 +1127,7 @@ elif menu == "LGS Takip":
                             <div class="title">LGS HAZIRLIK SÜRECİ AKADEMİK RAPORU</div>
                             <div class="subtitle">Sadiye ve Abdullah Tan Ortaokulu - Genel Süreç Analizi</div>
                         </div>
+                        {pdf_risk_html}
                         <table style="width:100%; border:none; margin-bottom:20px;">
                             <tr>
                                 <td style="text-align:left; border:none; font-size:14px;"><b>Öğrenci Adı Soyadı:</b> {secilen_ogr_analiz}</td>
@@ -1111,12 +1146,12 @@ elif menu == "LGS Takip":
                             <img class="graph-img" src="data:image/png;base64,{puan_trend_b64}">
                             <img class="graph-img" src="data:image/png;base64,{net_trend_b64}">
                         </div>
-                        <div class="section-title">🎯 Rehberlik Analizi ve Pedagojik Süreç Bulguları</div>
+                        <div class="section-title">🎯 Dinamik Teşhis Raporu ve Analiz Çıktıları</div>
                         <div class="pedagogic-box">
                             <div class="pedagogic-title">1. Sınav İsabet Oranı (Emin Olma Yüzdesi): %{isabet_orani:.1f}</div>
-                            Öğrencinin işaretlediği sorular içindeki doğruluk kalitesini ölçer. Son sınav isabet düzeyi %{isabet_orani:.1f} olarak hesaplanmıştır.
-                            <div class="pedagogic-title">2. Standart Sapma (Performans Tutarlılığı): {en_istikrarsiz_ders}</div>
-                            Netlerin sınavlar arası dalgalanmasını ölçer. En kararsız ders: <b>{en_istikrarsiz_ders}</b> branşıdır.
+                            {isabet_yorumu}
+                            <div class="pedagogic-title">2. Performans Tutarlılığı (Standart Sapma): {en_istikrarsiz_ders}</div>
+                            Bu dersteki istikrarsızlık, öğrencinin soru tipine veya sınav zorluğuna göre performansının çok değiştiğini, bilgilerin henüz tam olarak pekişmediğini gösterir.
                             <div class="pedagogic-title">3. Branş İvmesi (Son 3 Sınav Yönelimi):</div>
                             {pdf_ivme_metinleri}
                         </div>
@@ -1250,22 +1285,17 @@ elif menu == "🛠️ Test Verisi Modülü":
     with col_test2:
         if st.button("🗑️ Tüm Test Verilerini Temizle", type="secondary", use_container_width=True):
             with st.spinner("Gerçek verileriniz korunuyor, sadece test verileri temizleniyor..."):
-                
-                # 1. Test öğrencilerini bul (Adında '(Test)' geçenler)
                 res_test_ogr = supabase.table("ogrenciler").select("id").like("ad_soyad", "%(Test)%").execute()
                 if res_test_ogr.data:
                     test_ogr_ids = [row["id"] for row in res_test_ogr.data]
-                    # Zincirleme silme işlemi
                     supabase.table("notlar").delete().in_("ogrenci_id", test_ogr_ids).execute()
                     supabase.table("odev_teslimleri").delete().in_("ogrenci_id", test_ogr_ids).execute()
                     supabase.table("lgs_denemeleri").delete().in_("ogrenci_id", test_ogr_ids).execute()
                     supabase.table("ogrenciler").delete().in_("id", test_ogr_ids).execute()
                 
-                # 2. Test ödevlerini bul (Adında 'Test Ödevi' geçenler)
                 res_test_odev = supabase.table("odevler").select("id").like("odev_adi", "%Test Ödevi%").execute()
                 if res_test_odev.data:
                     test_odev_ids = [row["id"] for row in res_test_odev.data]
-                    # Ödev teslimlerini ve ödevlerin kendisini silme
                     supabase.table("odev_teslimleri").delete().in_("odev_id", test_odev_ids).execute()
                     supabase.table("odevler").delete().in_("id", test_odev_ids).execute()
                 
