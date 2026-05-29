@@ -29,6 +29,18 @@ supabase: Client = init_connection()
 branslar = ["Matematik", "Türkçe", "Fen Bilimleri", "Sosyal Bilgiler", "İngilizce", "Din Kültürü", "İnkılap Tarihi"]
 sinif_listesi = ["5-A", "6-A", "7-A", "8-A"]
 
+# Rol ve Kullanıcı Veritabanı (RBAC)
+KULLANICILAR = {
+    "admin": {"sifre": "123456", "rol": "admin", "brans": "Tümü"},
+    "matematik": {"sifre": "123456", "rol": "ogretmen", "brans": "Matematik"},
+    "turkce": {"sifre": "123456", "rol": "ogretmen", "brans": "Türkçe"},
+    "fen": {"sifre": "123456", "rol": "ogretmen", "brans": "Fen Bilimleri"},
+    "sosyal": {"sifre": "123456", "rol": "ogretmen", "brans": "Sosyal Bilgiler"},
+    "ingilizce": {"sifre": "123456", "rol": "ogretmen", "brans": "İngilizce"},
+    "din": {"sifre": "123456", "rol": "ogretmen", "brans": "Din Kültürü"},
+    "inkilap": {"sifre": "123456", "rol": "ogretmen", "brans": "İnkılap Tarihi"}
+}
+
 def get_base64_logo():
     if os.path.exists("logo.png"):
         with open("logo.png", "rb") as f:
@@ -82,7 +94,6 @@ if not st.session_state.giris_yapildi:
             
             if giris_butonu:
                 try:
-                    # Sabit kod yerine, doğrudan veritabanından kullanıcı doğrulama
                     res = supabase.table("kullanicilar").select("*").eq("kullanici_adi", k_adi).execute()
                     
                     if res.data and len(res.data) > 0:
@@ -121,7 +132,7 @@ st.sidebar.divider()
 # Branş Kısıtlaması (Rol Bazlı Menü Yönetimi)
 if st.session_state.rol == "admin":
     secilen_brans = st.sidebar.selectbox("İşlem Yapılacak Branş", branslar)
-    moduller = ["Öğrenci Yönetimi", "Öğrenci Profil Paneli", "Not Takip", "Ödev Takip", "LGS Takip", "🔑 Şifre İşlemleri", "🛠️ Test Verisi Üret"]
+    moduller = ["Öğrenci Yönetimi", "Öğrenci Profil Paneli", "Not Takip", "Ödev Takip", "LGS Takip", "🔑 Şifre İşlemleri", "🛠️ Test Verisi Modülü"]
 else:
     st.sidebar.success(f"Aktif Branş: {st.session_state.brans}")
     secilen_brans = st.session_state.brans
@@ -1150,85 +1161,112 @@ elif menu == "🔑 Şifre İşlemleri":
                     supabase.table("kullanicilar").update({"sifre": yeni_sifre}).eq("kullanici_adi", secili_k_adi).execute()
                     st.success(f"'{secili_k_adi}' kullanıcısının şifresi başarıyla güncellendi.")
 
-# --- MODÜL 7: TEST VERİSİ ÜRET (SADECE ADMİN) ---
-elif menu == "🛠️ Test Verisi Üret":
-    st.header("Sisteme Rastgele Test Verisi Ekleme")
-    st.warning("Bu işlem veritabanınıza rastgele öğrenciler, notlar ve ödevler ekleyecektir.")
+# --- MODÜL 7: TEST VERİSİ MODÜLÜ (SADECE ADMİN) ---
+elif menu == "🛠️ Test Verisi Modülü":
+    st.header("🛠️ Test Verisi Kontrol Paneli")
+    st.info("Bu modül, sistemi denemeniz için sahte öğrenciler ve notlar üretmenizi veya bu üretilen sahte verileri tek tuşla kalıcı olarak silmenizi sağlar.")
 
-    if st.button("Verileri Üret ve Sisteme Yükle", type="primary"):
-        isim_havuzu = ["Ahmet Yılmaz", "Ayşe Kaya", "Mehmet Demir", "Fatma Çelik", "Ali Can", "Zeynep Şahin", "Mustafa Yıldız", "Elif Özdemir", "Hasan Aydın", "Hatice Arslan"]
-        durumlar = ["Yaptı", "Yarım", "Yapmadı", "Gelmedi"]
+    col_test1, col_test2 = st.columns(2)
 
-        with st.spinner("Sistem tohumlanıyor (Seeding)... Lütfen bekleyin."):
-            ogrenciler_data = []
-            for sinif in sinif_listesi:
-                secilenler = random.sample(isim_havuzu, 5)
-                for isim in secilenler:
-                    ogrenciler_data.append({"ad_soyad": f"{isim} (Test)", "sinif": sinif})
-            res_ogr = supabase.table("ogrenciler").insert(ogrenciler_data).execute()
+    with col_test1:
+        if st.button("➕ Test Verilerini Üret ve Yükle", type="primary", use_container_width=True):
+            isim_havuzu = ["Ahmet Yılmaz", "Ayşe Kaya", "Mehmet Demir", "Fatma Çelik", "Ali Can", "Zeynep Şahin", "Mustafa Yıldız", "Elif Özdemir", "Hasan Aydın", "Hatice Arslan"]
+            durumlar = ["Yaptı", "Yarım", "Yapmadı", "Gelmedi"]
 
-            notlar_data = []
-            lgs_data = []
-            ogr_sinif_map = {ogr['id']: ogr['sinif'] for ogr in res_ogr.data}
+            with st.spinner("Sistem tohumlanıyor (Seeding)... Lütfen bekleyin."):
+                ogrenciler_data = []
+                for sinif in sinif_listesi:
+                    secilenler = random.sample(isim_havuzu, 5)
+                    for isim in secilenler:
+                        ogrenciler_data.append({"ad_soyad": f"{isim} (Test)", "sinif": sinif})
+                res_ogr = supabase.table("ogrenciler").insert(ogrenciler_data).execute()
 
-            for ogr_id, sinif in ogr_sinif_map.items():
-                for brans in branslar:
-                    notlar_data.append({
-                        "ogrenci_id": ogr_id, "brans": brans,
-                        "sinav_1": random.randint(40, 100), "sinav_2": random.randint(40, 100),
-                        "perf_1": random.randint(50, 100), "perf_2": random.randint(50, 100),
-                        "proje": random.randint(70, 100)
-                    })
-                if sinif == "8-A":
-                    for i in range(1, 9): 
-                        t_d, t_y = random.randint(12, 19), random.randint(0, 5)
-                        m_d, m_y = random.randint(6, 15), random.randint(0, 8)
-                        f_d, f_y = random.randint(12, 18), random.randint(0, 5)
-                        i_d, i_y = random.randint(6, 10), random.randint(0, 3)
-                        d_d, d_y = random.randint(7, 10), random.randint(0, 2)
-                        ing_d, ing_y = random.randint(6, 10), random.randint(0, 3)
-                        
-                        t_n = t_d - (t_y / 3)
-                        m_n = m_d - (m_y / 3)
-                        f_n = f_d - (f_y / 3)
-                        i_n = i_d - (i_y / 3)
-                        d_n = d_d - (d_y / 3)
-                        ing_n = ing_d - (ing_y / 3)
-                        
-                        puan_hesap = 200 + (t_n * 4.2) + (m_n * 4.2) + (f_n * 4.2) + (i_n * 1.6) + (d_n * 1.6) + (ing_n * 1.6)
-                        
-                        lgs_data.append({
-                            "ogrenci_id": ogr_id, "deneme_adi": f"Deneme {i}",
-                            "turkce_d": t_d, "turkce_y": t_y, "mat_d": m_d, "mat_y": m_y,
-                            "fen_d": f_d, "fen_y": f_y, "ink_d": i_d, "ink_y": i_y,
-                            "din_d": d_d, "din_y": d_y, "ing_d": ing_d, "ing_y": ing_y,
-                            "lgs_puani": round(float(puan_hesap), 2)
+                notlar_data = []
+                lgs_data = []
+                ogr_sinif_map = {ogr['id']: ogr['sinif'] for ogr in res_ogr.data}
+
+                for ogr_id, sinif in ogr_sinif_map.items():
+                    for brans in branslar:
+                        notlar_data.append({
+                            "ogrenci_id": ogr_id, "brans": brans,
+                            "sinav_1": random.randint(40, 100), "sinav_2": random.randint(40, 100),
+                            "perf_1": random.randint(50, 100), "perf_2": random.randint(50, 100),
+                            "proje": random.randint(70, 100)
                         })
+                    if sinif == "8-A":
+                        for i in range(1, 9): 
+                            t_d, t_y = random.randint(12, 19), random.randint(0, 5)
+                            m_d, m_y = random.randint(6, 15), random.randint(0, 8)
+                            f_d, f_y = random.randint(12, 18), random.randint(0, 5)
+                            i_d, i_y = random.randint(6, 10), random.randint(0, 3)
+                            d_d, d_y = random.randint(7, 10), random.randint(0, 2)
+                            ing_d, ing_y = random.randint(6, 10), random.randint(0, 3)
+                            
+                            t_n = t_d - (t_y / 3)
+                            m_n = m_d - (m_y / 3)
+                            f_n = f_d - (f_y / 3)
+                            i_n = i_d - (i_y / 3)
+                            d_n = d_d - (d_y / 3)
+                            ing_n = ing_d - (ing_y / 3)
+                            
+                            puan_hesap = 200 + (t_n * 4.2) + (m_n * 4.2) + (f_n * 4.2) + (i_n * 1.6) + (d_n * 1.6) + (ing_n * 1.6)
+                            
+                            lgs_data.append({
+                                "ogrenci_id": ogr_id, "deneme_adi": f"Deneme {i}",
+                                "turkce_d": t_d, "turkce_y": t_y, "mat_d": m_d, "mat_y": m_y,
+                                "fen_d": f_d, "fen_y": f_y, "ink_d": i_d, "ink_y": i_y,
+                                "din_d": d_d, "din_y": d_y, "ing_d": ing_d, "ing_y": ing_y,
+                                "lgs_puani": round(float(puan_hesap), 2)
+                            })
 
-            supabase.table("notlar").insert(notlar_data).execute()
-            if lgs_data:
-                supabase.table("lgs_denemeleri").insert(lgs_data).execute()
+                supabase.table("notlar").insert(notlar_data).execute()
+                if lgs_data:
+                    supabase.table("lgs_denemeleri").insert(lgs_data).execute()
 
-            odevler_data = []
-            for sinif in sinif_listesi:
-                for brans in branslar:
-                    for i in range(1, 4):
-                        odevler_data.append({
-                            "brans": brans, "sinif": sinif, "odev_adi": f"Test Ödevi {i}",
-                            "aciklama": "Otomatik oluşturuldu.", "teslim_tarihi": str(date.today() - timedelta(days=random.randint(1, 15)))
+                odevler_data = []
+                for sinif in sinif_listesi:
+                    for brans in branslar:
+                        for i in range(1, 4):
+                            odevler_data.append({
+                                "brans": brans, "sinif": sinif, "odev_adi": f"Test Ödevi {i}",
+                                "aciklama": "Otomatik oluşturuldu.", "teslim_tarihi": str(date.today() - timedelta(days=random.randint(1, 15)))
+                            })
+                res_odev = supabase.table("odevler").insert(odevler_data).execute()
+
+                teslimler_data = []
+                for odev in res_odev.data:
+                    helpful_students = [k for k, v in ogr_sinif_map.items() if v == odev['sinif']]
+                    for ogr_id in helpful_students:
+                        teslimler_data.append({
+                            "odev_id": odev['id'], "ogrenci_id": ogr_id, "durum": random.choice(durumlar), "ogretmen_notu": "Test notu."
                         })
-            res_odev = supabase.table("odevler").insert(odevler_data).execute()
+                
+                chunk_size = 500
+                for i in range(0, len(teslimler_data), chunk_size):
+                    supabase.table("odev_teslimleri").insert(teslimler_data[i:i+chunk_size]).execute()
 
-            teslimler_data = []
-            for odev in res_odev.data:
-                helpful_students = [k for k, v in ogr_sinif_map.items() if v == odev['sinif']]
-                for ogr_id in helpful_students:
-                    teslimler_data.append({
-                        "odev_id": odev['id'], "ogrenci_id": ogr_id, "durum": random.choice(durumlar), "ogretmen_notu": "Test notu."
-                    })
-            
-            chunk_size = 500
-            for i in range(0, len(teslimler_data), chunk_size):
-                supabase.table("odev_teslimleri").insert(teslimler_data[i:i+chunk_size]).execute()
+            st.success("Test verileri başarıyla oluşturuldu ve veritabanına eklendi!")
 
-        st.success("Test verileri başarıyla oluşturuldu ve veritabanına eklendi!")
+    with col_test2:
+        if st.button("🗑️ Tüm Test Verilerini Temizle", type="secondary", use_container_width=True):
+            with st.spinner("Gerçek verileriniz korunuyor, sadece test verileri temizleniyor..."):
+                
+                # 1. Test öğrencilerini bul (Adında '(Test)' geçenler)
+                res_test_ogr = supabase.table("ogrenciler").select("id").like("ad_soyad", "%(Test)%").execute()
+                if res_test_ogr.data:
+                    test_ogr_ids = [row["id"] for row in res_test_ogr.data]
+                    # Zincirleme silme işlemi
+                    supabase.table("notlar").delete().in_("ogrenci_id", test_ogr_ids).execute()
+                    supabase.table("odev_teslimleri").delete().in_("ogrenci_id", test_ogr_ids).execute()
+                    supabase.table("lgs_denemeleri").delete().in_("ogrenci_id", test_ogr_ids).execute()
+                    supabase.table("ogrenciler").delete().in_("id", test_ogr_ids).execute()
+                
+                # 2. Test ödevlerini bul (Adında 'Test Ödevi' geçenler)
+                res_test_odev = supabase.table("odevler").select("id").like("odev_adi", "%Test Ödevi%").execute()
+                if res_test_odev.data:
+                    test_odev_ids = [row["id"] for row in res_test_odev.data]
+                    # Ödev teslimlerini ve ödevlerin kendisini silme
+                    supabase.table("odev_teslimleri").delete().in_("odev_id", test_odev_ids).execute()
+                    supabase.table("odevler").delete().in_("id", test_odev_ids).execute()
+                
+            st.success("Test verilerinin tamamı sistemden kalıcı olarak temizlendi.")
