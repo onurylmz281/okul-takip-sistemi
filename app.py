@@ -34,7 +34,7 @@ if not st.session_state.giris_yapildi:
             Bu panel, okul yönetim sürecini dijitalleştirerek öğretmen ve velilerimiz için veri odaklı 
             bir takip mekanizması sunar. Panel üzerinden aşağıdaki işlemleri gerçekleştirebilirsiniz:
             
-            * **Öğrenci Yönetimi:** Öğrenci kayıtlarını sınıf bazlı oluşturabilir ve yönetebilirsiniz.
+            * **Öğrenci Yönetimi:** Öğrenci kayıtlarını sınıf bazlı oluşturabilir ve toplu yönetebilirsiniz.
             * **Akademik Takip:** Not girişlerini yapabilir, branş bazlı ortalamaları izleyebilir ve PDF profil raporları alabilirsiniz.
             * **Ödev Süreçleri:** Ödev tanımlayabilir, teslim durumlarını puanlayabilir ve detaylı istatistikler tutabilirsiniz.
             * **LGS Hazırlık (8. Sınıflar):** Deneme sınavı sonuçlarını girebilir, sınıf sıralamalarını görebilir ve sınavları 'Kafa Kafaya' analiz dökümleriyle kıyaslayabilirsiniz.
@@ -118,7 +118,7 @@ if menu == "Öğrenci Yönetimi":
             st.info("Kayıtlı öğrenci bulunmamaktadır.")
 
     with tab_sil:
-        st.warning("⚠️ Dikkat: Bir öğrenciyi sildiğinizde, o öğrenciye ait tüm not, ödev ve LGS deneme kayıtları ilişkili tablolardan kalıcı olarak temizlenir.")
+        st.warning("⚠️ Dikkat: Seçilen öğrencileri sildiğinizde, bu öğrencilere ait tüm not, ödev ve LGS deneme kayıtları ilişkili tablolardan kalıcı olarak temizlenir.")
         secilen_sinif_sil = st.selectbox("Sınıf Seçin", sinif_listesi, key="ogr_sil_sinif")
         ogrenciler_sil_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif_sil).execute()
         
@@ -126,18 +126,21 @@ if menu == "Öğrenci Yönetimi":
             st.info("Bu sınıfta silinecek kayıtlı öğrenci bulunmuyor.")
         else:
             ogr_secenekleri_sil = {ogr["ad_soyad"]: ogr["id"] for ogr in ogrenciler_sil_res.data}
-            silinecek_ogr_adi = st.selectbox("Silinecek Öğrenciyi Seçin", list(ogr_secenekleri_sil.keys()))
-            silinecek_ogr_id = ogr_secenekleri_sil[silinecek_ogr_adi]
+            silinecek_ogrenciler_ad = st.multiselect("Silinecek Öğrencileri Seçin", list(ogr_secenekleri_sil.keys()))
             
-            if st.button(f"🗑️ '{silinecek_ogr_adi}' Adlı Öğrenciyi ve Tüm Verilerini Sil", type="primary"):
-                # Zincirleme Veri Temizliği (Cascade)
-                supabase.table("notlar").delete().eq("ogrenci_id", silinecek_ogr_id).execute()
-                supabase.table("odev_teslimleri").delete().eq("ogrenci_id", silinecek_ogr_id).execute()
-                supabase.table("lgs_denemeleri").delete().eq("ogrenci_id", silinecek_ogr_id).execute()
-                supabase.table("ogrenciler").delete().eq("id", silinecek_ogr_id).execute()
+            if silinecek_ogrenciler_ad:
+                silinecek_ogr_id_list = [ogr_secenekleri_sil[ad] for ad in silinecek_ogrenciler_ad]
                 
-                st.success(f"{silinecek_ogr_adi} ve ilişkili tüm akademik veriler sistemden tamamen silindi.")
-                st.rerun()
+                if st.button(f"🗑️ Seçili {len(silinecek_ogrenciler_ad)} Öğrenciyi ve Tüm Verilerini Sil", type="primary"):
+                    supabase.table("notlar").delete().in_("ogrenci_id", silinecek_ogr_id_list).execute()
+                    supabase.table("odev_teslimleri").delete().in_("ogrenci_id", silinecek_ogr_id_list).execute()
+                    supabase.table("lgs_denemeleri").delete().in_("ogrenci_id", silinecek_ogr_id_list).execute()
+                    supabase.table("ogrenciler").delete().in_("id", silinecek_ogr_id_list).execute()
+                    
+                    st.success(f"Seçilen {len(silinecek_ogrenciler_ad)} öğrenci ve ilişkili tüm akademik veriler sistemden tamamen silindi.")
+                    st.rerun()
+            else:
+                st.info("Silmek için lütfen listeden en az bir öğrenci seçin.")
 
 # --- ÖĞRENCİ PROFİL PANELİ ---
 elif menu == "Öğrenci Profil Paneli":
@@ -803,7 +806,6 @@ elif menu == "LGS Takip":
                     ortalama_puan = round(df_lgs["lgs_puani"].mean(), 2)
                     en_yuksek_puan = round(df_lgs["lgs_puani"].max(), 2)
                     
-                    # Pedagojik Ölçümler
                     toplam_dogru = int(son_deneme_verisi[["turkce_d", "mat_d", "fen_d", "ink_d", "din_d", "ing_d"]].sum())
                     toplam_yanlis = int(son_deneme_verisi[["turkce_y", "mat_y", "fen_y", "ink_y", "din_y", "ing_y"]].sum())
                     toplam_isaretlenen = toplam_dogru + toplam_yanlis
