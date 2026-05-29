@@ -26,19 +26,18 @@ def init_connection():
 supabase: Client = init_connection()
 
 # --- 3. SABİTLER VE YARDIMCI FONKSİYONLAR ---
-branslar = ["Matematik", "Türkçe", "Fen Bilimleri", "Sosyal Bilgiler", "İngilizce", "Din Kültürü", "İnkılap Tarihi"]
+branslar = ["Matematik", "Türkçe", "Fen Bilimleri", "Sosyal/İnkılap", "İngilizce", "Din Kültürü"]
 sinif_listesi = ["5-A", "6-A", "7-A", "8-A"]
 
-# Rol ve Kullanıcı Veritabanı (RBAC)
+# Rol ve Kullanıcı Veritabanı Bilgi Dokümantasyonu (Veritabanındaki yapıya referanstır)
 KULLANICILAR = {
     "admin": {"sifre": "123456", "rol": "admin", "brans": "Tümü"},
     "matematik": {"sifre": "123456", "rol": "ogretmen", "brans": "Matematik"},
     "turkce": {"sifre": "123456", "rol": "ogretmen", "brans": "Türkçe"},
     "fen": {"sifre": "123456", "rol": "ogretmen", "brans": "Fen Bilimleri"},
-    "sosyal": {"sifre": "123456", "rol": "ogretmen", "brans": "Sosyal Bilgiler"},
+    "sosyal_inkilap": {"sifre": "123456", "rol": "ogretmen", "brans": "Sosyal/İnkılap"},
     "ingilizce": {"sifre": "123456", "rol": "ogretmen", "brans": "İngilizce"},
-    "din": {"sifre": "123456", "rol": "ogretmen", "brans": "Din Kültürü"},
-    "inkilap": {"sifre": "123456", "rol": "ogretmen", "brans": "İnkılap Tarihi"}
+    "din": {"sifre": "123456", "rol": "ogretmen", "brans": "Din Kültürü"}
 }
 
 def get_base64_logo():
@@ -142,7 +141,6 @@ else:
     secilen_brans = st.session_state.brans
     moduller = ["Öğrenci Profil Paneli", "Not Takip", "Ödev Takip", "LGS Takip"]
 
-# Menü yönlendirme yapısı
 if st.session_state.aktif_menu not in moduller:
     st.session_state.aktif_menu = moduller[0]
 
@@ -509,7 +507,6 @@ elif menu == "Not Takip":
             except Exception as e:
                 st.error(f"Notlar kaydedilirken hata oluştu: {str(e)}")
 
-        # Dinamik Yönlendirme Alanı
         st.divider()
         st.write("#### 👤 Öğrenci Profiline Hızlı Geçiş")
         hedef_ogr_not = st.selectbox("Profili görüntülenecek öğrenciyi seçin", [o["ad_soyad"] for o in ogrenciler], key="hizli_gecis_not")
@@ -632,7 +629,6 @@ elif menu == "Ödev Takip":
                     except Exception as e:
                         st.error(f"Değerlendirme kaydedilemedi: {str(e)}")
 
-                # Dinamik Yönlendirme Alanı
                 st.divider()
                 st.write("#### 👤 Öğrenci Profiline Hızlı Geçiş")
                 hedef_ogr_odev = st.selectbox("Profili görüntülenecek öğrenciyi seçin", [o["ad_soyad"] for o in ogrenciler], key="hizli_gecis_odev")
@@ -744,7 +740,7 @@ elif menu == "LGS Takip":
                         lgs_tablo_verisi.append({
                             "Öğrenci ID": ogr["id"], "Kayıt ID": None, "Öğrenci Adı": ogr["ad_soyad"],
                             "Türkçe D": 0, "Türkçe Y": 0, "Matematik D": 0, "Matematik Y": 0,
-                            "Fen D": 0, "Fen Y": 0, "İnkılap D": 0, "İnkılap Y": 0,
+                            "Fen D": 0, "Fen Y": 0, "Sosyal/İnkılap D": 0, "Sosyal/İnkılap Y": 0,
                             "Din D": 0, "Din Y": 0, "İngilizce D": 0, "İngilizce Y": 0,
                             "LGS Puanı": 200.0
                         })
@@ -777,7 +773,7 @@ elif menu == "LGS Takip":
                                 "Türkçe D": d_veri.get("turkce_d", 0), "Türkçe Y": d_veri.get("turkce_y", 0),
                                 "Matematik D": d_veri.get("mat_d", 0), "Matematik Y": d_veri.get("mat_y", 0),
                                 "Fen D": d_veri.get("fen_d", 0), "Fen Y": d_veri.get("fen_y", 0),
-                                "İnkılap D": d_veri.get("ink_d", 0), "İnkılap Y": d_veri.get("ink_y", 0),
+                                "Sosyal/İnkılap D": d_veri.get("ink_d", 0), "Sosyal/İnkılap Y": d_veri.get("ink_y", 0),
                                 "Din D": d_veri.get("din_d", 0), "Din Y": d_veri.get("din_y", 0),
                                 "İngilizce D": d_veri.get("ing_d", 0), "İngilizce Y": d_veri.get("ing_y", 0),
                                 "LGS Puanı": float(d_veri.get("lgs_puani", 200.0))
@@ -800,8 +796,8 @@ elif menu == "LGS Takip":
                             "Matematik Y": st.column_config.NumberColumn(min_value=0, max_value=20, step=1),
                             "Fen D": st.column_config.NumberColumn(min_value=0, max_value=20, step=1),
                             "Fen Y": st.column_config.NumberColumn(min_value=0, max_value=20, step=1),
-                            "İnkılap D": st.column_config.NumberColumn(min_value=0, max_value=10, step=1),
-                            "İnkılap Y": st.column_config.NumberColumn(min_value=0, max_value=10, step=1),
+                            "Sosyal/İnkılap D": st.column_config.NumberColumn(min_value=0, max_value=10, step=1),
+                            "Sosyal/İnkılap Y": st.column_config.NumberColumn(min_value=0, max_value=10, step=1),
                             "Din D": st.column_config.NumberColumn(min_value=0, max_value=10, step=1),
                             "Din Y": st.column_config.NumberColumn(min_value=0, max_value=10, step=1),
                             "İngilizce D": st.column_config.NumberColumn(min_value=0, max_value=10, step=1),
@@ -816,7 +812,7 @@ elif menu == "LGS Takip":
                         else:
                             hata_var_mi = False
                             for index, row in duzenlenmis_lgs_df.iterrows():
-                                if (row["Türkçe D"]+row["Türkçe Y"]>20) or (row["Matematik D"]+row["Matematik Y"]>20) or (row["Fen D"]+row["Fen Y"]>20) or (row["İnkılap D"]+row["İnkılap Y"]>10) or (row["Din D"]+row["Din Y"]>10) or (row["İngilizce D"]+row["İngilizce Y"]>10):
+                                if (row["Türkçe D"]+row["Türkçe Y"]>20) or (row["Matematik D"]+row["Matematik Y"]>20) or (row["Fen D"]+row["Fen Y"]>20) or (row["Sosyal/İnkılap D"]+row["Sosyal/İnkılap Y"]>10) or (row["Din D"]+row["Din Y"]>10) or (row["İngilizce D"]+row["İngilizce Y"]>10):
                                     st.error(f"❌ {row['Öğrenci Adı']} için ders kısıt sınırları aşıldı.")
                                     hata_var_mi = True
                                     break
@@ -829,7 +825,7 @@ elif menu == "LGS Takip":
                                             "turkce_d": int(row["Türkçe D"]), "turkce_y": int(row["Türkçe Y"]),
                                             "mat_d": int(row["Matematik D"]), "mat_y": int(row["Matematik Y"]),
                                             "fen_d": int(row["Fen D"]), "fen_y": int(row["Fen Y"]),
-                                            "ink_d": int(row["İnkılap D"]), "ink_y": int(row["İnkılap Y"]),
+                                            "ink_d": int(row["Sosyal/İnkılap D"]), "ink_y": int(row["Sosyal/İnkılap Y"]),
                                             "din_d": int(row["Din D"]), "din_y": int(row["Din Y"]),
                                             "ing_d": int(row["İngilizce D"]), "ing_y": int(row["İngilizce Y"]),
                                             "lgs_puani": float(row["LGS Puanı"]) if pd.notnull(row["LGS Puanı"]) else 200.0
@@ -862,16 +858,16 @@ elif menu == "LGS Takip":
                         df_s["Türkçe Net"] = df_s["turkce_d"] - (df_s["turkce_y"] / 3)
                         df_s["Matematik Net"] = df_s["mat_d"] - (df_s["mat_y"] / 3)
                         df_s["Fen Net"] = df_s["fen_d"] - (df_s["fen_y"] / 3)
-                        df_s["İnkılap Net"] = df_s["ink_d"] - (df_s["ink_y"] / 3)
+                        df_s["Sosyal/İnkılap Net"] = df_s["ink_d"] - (df_s["ink_y"] / 3)
                         df_s["Din Net"] = df_s["din_d"] - (df_s["din_y"] / 3)
                         df_s["İngilizce Net"] = df_s["ing_d"] - (df_s["ing_y"] / 3)
-                        df_s["Toplam Net"] = df_s[["Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net"]].sum(axis=1)
+                        df_s["Toplam Net"] = df_s[["Türkçe Net", "Matematik Net", "Fen Net", "Sosyal/İnkılap Net", "Din Net", "İngilizce Net"]].sum(axis=1)
                         
                         df_s = df_s.sort_values(by="lgs_puani", ascending=False).reset_index(drop=True)
                         df_s.index += 1
                         df_s = df_s.reset_index().rename(columns={"index": "Sınıf Derecesi"})
                         
-                        tablo_s = df_s[["Sınıf Derecesi", "Öğrenci", "Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net", "Toplam Net", "lgs_puani"]].rename(columns={"lgs_puani": "Girilen LGS Puanı"})
+                        tablo_s = df_s[["Sınıf Derecesi", "Öğrenci", "Türkçe Net", "Matematik Net", "Fen Net", "Sosyal/İnkılap Net", "Din Net", "İngilizce Net", "Toplam Net", "lgs_puani"]].rename(columns={"lgs_puani": "Girilen LGS Puanı"})
                         st.subheader(f"🏆 {secili_deneme_analiz} Sınavı - Başarı ve Puan Sıralaması")
                         st.dataframe(tablo_s, hide_index=True, use_container_width=True)
                         
@@ -909,10 +905,10 @@ elif menu == "LGS Takip":
                     df_lgs["Türkçe Net"] = df_lgs["turkce_d"] - (df_lgs["turkce_y"] / 3)
                     df_lgs["Matematik Net"] = df_lgs["mat_d"] - (df_lgs["mat_y"] / 3)
                     df_lgs["Fen Net"] = df_lgs["fen_d"] - (df_lgs["fen_y"] / 3)
-                    df_lgs["İnkılap Net"] = df_lgs["ink_d"] - (df_lgs["ink_y"] / 3)
+                    df_lgs["Sosyal/İnkılap Net"] = df_lgs["ink_d"] - (df_lgs["ink_y"] / 3)
                     df_lgs["Din Net"] = df_lgs["din_d"] - (df_lgs["din_y"] / 3)
                     df_lgs["İngilizce Net"] = df_lgs["ing_d"] - (df_lgs["ing_y"] / 3)
-                    df_lgs["Toplam Net"] = df_lgs[["Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net"]].sum(axis=1)
+                    df_lgs["Toplam Net"] = df_lgs[["Türkçe Net", "Matematik Net", "Fen Net", "Sosyal/İnkılap Net", "Din Net", "İngilizce Net"]].sum(axis=1)
                     
                     son_deneme_verisi = df_lgs.iloc[-1]
                     ortalama_puan = round(df_lgs["lgs_puani"].mean(), 2)
@@ -923,7 +919,7 @@ elif menu == "LGS Takip":
                     toplam_isaretlenen = toplam_dogru + toplam_yanlis
                     isabet_orani = (toplam_dogru / toplam_isaretlenen * 100) if toplam_isaretlenen > 0 else 0
                     
-                    ders_listesi = ["Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net"]
+                    ders_listesi = ["Türkçe Net", "Matematik Net", "Fen Net", "Sosyal/İnkılap Net", "Din Net", "İngilizce Net"]
                     std_sapmalar = df_lgs[ders_listesi].std().fillna(0)
                     ortalamalar = df_lgs[ders_listesi].mean()
                     
@@ -1046,11 +1042,11 @@ elif menu == "LGS Takip":
                             col_radar, col_tablo = st.columns([1, 1])
                             with col_radar:
                                 st.write(f"**Gruplanmış Çubuk Karşılaştırma Grafiği**")
-                                x_labels = [d.replace(" Net", "") for d in ders_listesi]
+                                labels_ui = ["Mat","Türkçe","Fen","Sosyal/İnkılap","Din","İng"]
                                 vals1 = [d1_veri[d] for d in ders_listesi]
                                 vals2 = [d2_veri[d] for d in ders_listesi]
                                 
-                                x = np.arange(len(x_labels))
+                                x = np.arange(len(labels_ui))
                                 width = 0.35
                                 
                                 fig_bar, ax_bar = plt.subplots(figsize=(6, 4))
@@ -1058,7 +1054,7 @@ elif menu == "LGS Takip":
                                 ax_bar.bar(x + width/2, vals2, width, label=d2_isim, color='#FFCC80')
                                 ax_bar.set_ylabel('Net Sayısı')
                                 ax_bar.set_xticks(x)
-                                ax_bar.set_xticklabels(x_labels, fontsize=8)
+                                ax_bar.set_xticklabels(labels_ui, fontsize=8)
                                 ax_bar.legend()
                                 ax_bar.grid(axis='y', linestyle='--', alpha=0.5)
                                 st.pyplot(fig_bar)
@@ -1128,7 +1124,7 @@ elif menu == "LGS Takip":
                     net_trend_b64 = base64.b64encode(buf_net.read()).decode('utf-8')
                     plt.close(fig_net)
                     
-                    df_pdf_tablo = df_lgs[["deneme_adi", "Türkçe Net", "Matematik Net", "Fen Net", "İnkılap Net", "Din Net", "İngilizce Net", "Toplam Net", "lgs_puani"]].rename(columns={"deneme_adi":"Sınav", "lgs_puani":"LGS Puanı"})
+                    df_pdf_tablo = df_lgs[["deneme_adi", "Türkçe Net", "Matematik Net", "Fen Net", "Sosyal/İnkılap Net", "Din Net", "İngilizce Net", "Toplam Net", "lgs_puani"]].rename(columns={"deneme_adi":"Sınav", "lgs_puani":"LGS Puanı"})
                     html_table_lgs = df_pdf_tablo.to_html(border=1, index=False, justify='center')
                     
                     pdf_ivme_metinleri = "<ul>" + "".join(ivme_liste).replace(":green[","<span style='color:green;font-weight:bold;'>").replace(":red[","<span style='color:red;font-weight:bold;'>").replace("]","</span>") + "</ul>" if len(df_lgs) >= 3 else "<p>Yetersiz veri.</p>"
@@ -1207,7 +1203,6 @@ elif menu == "LGS Takip":
                         mime="text/html"
                     )
                 
-                # Dinamik Yönlendirme Alanı (LGS)
                 st.divider()
                 st.write("#### 👤 Öğrenci Profiline Hızlı Geçiş")
                 if st.button(f"'{secilen_ogr_analiz}' Adlı Öğrencinin Profil Paneline Git"):
