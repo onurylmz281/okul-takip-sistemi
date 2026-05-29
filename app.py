@@ -412,6 +412,7 @@ elif menu == "Öğrenci Profil Paneli":
     except Exception as e:
         st.error(f"Profil verileri yüklenirken hata oluştu: {str(e)}")
 
+
 # --- MODÜL 3: NOT TAKİP ---
 elif menu == "Not Takip":
     st.header(f"📝 Not Takip Paneli - {secilen_brans}")
@@ -801,13 +802,11 @@ elif menu == "LGS Takip":
                                         for index, row in duzenlenmis_lgs_df.iterrows():
                                             k_id = row.get("Kayıt ID")
                                             
-                                            # Katılmayan öğrenci mekanizması
                                             if row["Katılım"] == "Girmedi":
                                                 if pd.notnull(k_id):
                                                     supabase.table("lgs_denemeleri").delete().eq("id", int(k_id)).execute()
                                                 continue
                                                 
-                                            # Katılan öğrenci mekanizması
                                             kayit_paketi = {
                                                 "ogrenci_id": int(row["Öğrenci ID"]), "deneme_adi": deneme_adi,
                                                 "turkce_d": int(row["Türkçe D"]), "turkce_y": int(row["Türkçe Y"]),
