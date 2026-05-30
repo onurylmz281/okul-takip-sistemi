@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 from supabase import create_client, Client
 from datetime import date, timedelta
-import matplotlib.subplots as subplots
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator
 import io
