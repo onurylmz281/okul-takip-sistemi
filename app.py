@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from supabase import create_client, Client
 from datetime import date, timedelta
+import matplotlib.subplots as subplots
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator
 import io
@@ -342,86 +343,86 @@ elif menu == "Öğrenci Profil Paneli":
                                 idx += 1
                         else:
                             st.warning("Ders bazlı analiz için veri bulunamadı.")
-                    else:
-                        st.warning("Seçilen kriterlere uygun ödev kaydı bulunamadığından grafik oluşturulamadı.")
-                
-                with col_tablo:
-                    st.write("**Filtrelenmiş Ödev Sorumluluk Listesi**")
-                    st.dataframe(df_filtered_odev, hide_index=True, use_container_width=True)
-                    df_html_odevler = df_filtered_odev.to_html(border=1, index=False, justify='center')
-            else:
-                st.info("Bu öğrenciye ait ödev değerlendirmesi bulunmamaktadır.")
-
-            st.sidebar.markdown("---")
-            st.sidebar.subheader("Öğrenci Genel Durumu")
-            st.sidebar.metric("Genel Not Ortalaması", f"{genel_ortalama} / 100")
-            st.sidebar.metric("Ödev Tamamlama Oranı", f"% {odev_orani}")
+                else:
+                    st.warning("Seçilen kriterlere uygun ödev kaydı bulunamadığından grafik oluşturulamadı.")
             
-            html_odev_grafikleri = ""
-            if genel_graph_base64:
-                html_odev_grafikleri = f"""
-                <div style="text-align: center; margin-top: 15px;">
-                    <div style="display: inline-block; width: 45%; vertical-align: top;">
-                        <b>Genel Ödev Dağılımı</b><br>
-                        <img src="data:image/png;base64,{genel_graph_base64}" style="max-width: 250px;">
-                    </div>
-                    <div style="display: inline-block; width: 50%; vertical-align: top;">
-                        <b>Ders Bazlı Ödev Dağılımları</b><br>
-                        {pdf_brans_grafikleri_html}
-                    </div>
-                </div>
-                """
+            with col_tablo:
+                st.write("**Filtrelenmiş Ödev Sorumluluk Listesi**")
+                st.dataframe(df_filtered_odev, hide_index=True, use_container_width=True)
+                df_html_odevler = df_filtered_odev.to_html(border=1, index=False, justify='center')
+        else:
+            st.info("Bu öğrenciye ait ödev değerlendirmesi bulunmamaktadır.")
 
-            profil_pdf_html = f"""
-            <html>
-            <head>
-            <meta charset="utf-8">
-            <title>Öğrenci Profil Raporu</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; margin: 35px; color: #333; }}
-                .title-container {{ margin-bottom: 30px; overflow: hidden; }}
-                .title {{ text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 5px; margin-top: 10px; }}
-                .subtitle {{ text-align: center; font-size: 14px; color: #555; }}
-                .kv-table {{ width: 100%; border: none; margin-bottom: 20px; }}
-                table {{ width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }}
-                th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
-                th {{ background-color: #f5f5f5; font-weight: bold; }}
-                .section-title {{ font-size: 15px; font-weight: bold; color: #fff; background-color: #2196F3; padding: 6px 10px; margin-top: 25px; border-radius: 3px; }}
-                .summary-box {{ background-color: #f9fbfd; border-left: 4px solid #4CAF50; padding: 12px; margin-top: 15px; font-size: 13px; text-align: center; }}
-            </style>
-            </head>
-            <body onload="window.print()">
-                <div class="title-container">
-                    {logo_html}
-                    <div class="title">ÖĞRENCİ AKADEMİK PROFİL RAPORU</div>
-                    <div class="subtitle">Sadiye ve Abdullah Tan Ortaokulu - Not ve Ödev Gelişim Dökümü</div>
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Öğrenci Genel Durumu")
+        st.sidebar.metric("Genel Not Ortalaması", f"{genel_ortalama} / 100")
+        st.sidebar.metric("Ödev Tamamlama Oranı", f"% {odev_orani}")
+        
+        html_odev_grafikleri = ""
+        if genel_graph_base64:
+            html_odev_grafikleri = f"""
+            <div style="text-align: center; margin-top: 15px;">
+                <div style="display: inline-block; width: 45%; vertical-align: top;">
+                    <b>Genel Ödev Dağılımı</b><br>
+                    <img src="data:image/png;base64,{genel_graph_base64}" style="max-width: 250px;">
                 </div>
-                <table class="kv-table">
-                    <tr>
-                        <td style="text-align:left; border:none; font-size:14px;"><b>Öğrenci Adı Soyadı:</b> {secilen_ogrenci}</td>
-                        <td style="text-align:right; border:none; font-size:14px;"><b>Sınıfı:</b> {secilen_sinif} | <b>Rapor Tarihi:</b> {date.today().strftime('%d.%m.%Y')}</td>
-                    </tr>
-                </table>
-                <div class="summary-box">
-                    <b>Genel Not Ortalaması:</b> {genel_ortalama} / 100 &nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp; <b>Ödev Tamamlama Oranı:</b> % {odev_orani}
+                <div style="display: inline-block; width: 50%; vertical-align: top;">
+                    <b>Ders Bazlı Ödev Dağılımları</b><br>
+                    {pdf_brans_grafikleri_html}
                 </div>
-                <div class="section-title">📊 Branş Bazlı Not Durumu</div>
-                {df_html_notlar}
-                <div class="section-title">📚 Ödev Dağılım İstatistikleri</div>
-                {html_odev_grafikleri}
-                <div class="section-title">📝 Ödev Sorumluluk Listesi</div>
-                {df_html_odevler}
-            </body>
-            </html>
+            </div>
             """
-            st.divider()
-            st.write("#### 💾 Öğrenci Profil Raporunu Dışa Aktar")
-            st.download_button(
-                label="📄 Profil Raporunu PDF İndir",
-                data=profil_pdf_html,
-                file_name=f"{secilen_ogrenci}_Profil_Raporu.html",
-                mime="text/html"
-            )
+
+        profil_pdf_html = f"""
+        <html>
+        <head>
+        <meta charset="utf-8">
+        <title>Öğrenci Profil Raporu</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 35px; color: #333; }}
+            .title-container {{ margin-bottom: 30px; overflow: hidden; }}
+            .title {{ text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 5px; margin-top: 10px; }}
+            .subtitle {{ text-align: center; font-size: 14px; color: #555; }}
+            .kv-table {{ width: 100%; border: none; margin-bottom: 20px; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }}
+            th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
+            th {{ background-color: #f5f5f5; font-weight: bold; }}
+            .section-title {{ font-size: 15px; font-weight: bold; color: #fff; background-color: #2196F3; padding: 6px 10px; margin-top: 25px; border-radius: 3px; }}
+            .summary-box {{ background-color: #f9fbfd; border-left: 4px solid #4CAF50; padding: 12px; margin-top: 15px; font-size: 13px; text-align: center; }}
+        </style>
+        </head>
+        <body onload="window.print()">
+            <div class="title-container">
+                {logo_html}
+                <div class="title">ÖĞRENCİ AKADEMİK PROFİL RAPORU</div>
+                <div class="subtitle">Sadiye ve Abdullah Tan Ortaokulu - Not ve Ödev Gelişim Dökümü</div>
+            </div>
+            <table class="kv-table">
+                <tr>
+                    <td style="text-align:left; border:none; font-size:14px;"><b>Öğrenci Adı Soyadı:</b> {secilen_ogrenci}</td>
+                    <td style="text-align:right; border:none; font-size:14px;"><b>Sınıfı:</b> {secilen_sinif} | <b>Rapor Tarihi:</b> {date.today().strftime('%d.%m.%Y')}</td>
+                </tr>
+            </table>
+            <div class="summary-box">
+                <b>Genel Not Ortalaması:</b> {genel_ortalama} / 100 &nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp; <b>Ödev Tamamlama Oranı:</b> % {odev_orani}
+            </div>
+            <div class="section-title">📊 Branş Bazlı Not Durumu</div>
+            {df_html_notlar}
+            <div class="section-title">📚 Ödev Dağılım İstatistikleri</div>
+            {html_odev_grafikleri}
+            <div class="section-title">📝 Ödev Sorumluluk Listesi</div>
+            {df_html_odevler}
+        </body>
+        </html>
+        """
+        st.divider()
+        st.write("#### 💾 Öğrenci Profil Raporunu Dışa Aktar")
+        st.download_button(
+            label="📄 Profil Raporunu PDF İndir",
+            data=profil_pdf_html,
+            file_name=f"{secilen_ogrenci}_Profil_Raporu.html",
+            mime="text/html"
+        )
     except Exception as e:
         st.error(f"Profil verileri yüklenirken hata oluştu: {str(e)}")
 
@@ -540,7 +541,6 @@ elif menu == "Ödev Takip":
         secilen_sinif_kontrol = st.selectbox("Sınıf Seçin", sinif_listesi, key="odev_sinif_kontrol")
         try:
             odevler_res = supabase.table("odevler").select("*").eq("sinif", secilen_sinif_kontrol).eq("brans", secilen_brans).execute()
-            
             if not odevler_res.data:
                 st.info("Bu sınıfa ve branşa ait tanımlanmış bir ödev bulunmamaktadır.")
             else:
@@ -998,8 +998,12 @@ elif menu == "LGS Takip":
                             
                             with col_g1:
                                 st.write("**LGS Puan Gelişimi**")
-                                fig_puan, ax_puan = plt.subplots(figsize=(4, 2.5))
+                                fig_puan, ax_puan = plt.subplots(figsize=(5, 3))
                                 ax_puan.plot(df_lgs["deneme_adi"], df_lgs["lgs_puani"], marker='o', color='#2196F3', linewidth=2)
+                                ax_puan.tick_params(axis='x', rotation=45)
+                                for label in ax_puan.get_xticklabels():
+                                    label.set_ha('right')
+                                ax_puan.tick_params(axis='both', labelsize=8)
                                 ax_puan.grid(True, linestyle='--', alpha=0.4)
                                 st.pyplot(fig_puan)
                                 
@@ -1011,9 +1015,13 @@ elif menu == "LGS Takip":
 
                             with col_g2:
                                 st.write("**Toplam Net Gelişimi**")
-                                fig_net, ax_net = plt.subplots(figsize=(4, 2.5))
+                                fig_net, ax_net = plt.subplots(figsize=(5, 3))
                                 ax_net.plot(df_lgs["deneme_adi"], df_lgs["Toplam Net"], marker='s', color='#4CAF50', linewidth=2)
                                 ax_net.yaxis.set_major_locator(MultipleLocator(1))
+                                ax_net.tick_params(axis='x', rotation=45)
+                                for label in ax_net.get_xticklabels():
+                                    label.set_ha('right')
+                                ax_net.tick_params(axis='both', labelsize=8)
                                 ax_net.grid(True, linestyle='--', alpha=0.4)
                                 st.pyplot(fig_net)
                                 
@@ -1025,9 +1033,13 @@ elif menu == "LGS Takip":
 
                             with col_g3:
                                 st.write("**Yüzdelik Dilim Trendi (%)**")
-                                fig_yuzde, ax_yuzde = plt.subplots(figsize=(4, 2.5))
+                                fig_yuzde, ax_yuzde = plt.subplots(figsize=(5, 3))
                                 ax_yuzde.plot(df_lgs["deneme_adi"], df_lgs["yuzdelik_dilim"], marker='v', color='#FF9800', linewidth=2)
                                 ax_yuzde.invert_yaxis()
+                                ax_yuzde.tick_params(axis='x', rotation=45)
+                                for label in ax_yuzde.get_xticklabels():
+                                    label.set_ha('right')
+                                ax_yuzde.tick_params(axis='both', labelsize=8)
                                 ax_yuzde.grid(True, linestyle='--', alpha=0.4)
                                 st.pyplot(fig_yuzde)
                                 
@@ -1042,10 +1054,14 @@ elif menu == "LGS Takip":
                             ders_grafikleri_html = ""
                             
                             for idx, ders in enumerate(ders_listesi):
-                                fig_ders, ax_ders = plt.subplots(figsize=(4, 2))
+                                fig_ders, ax_ders = plt.subplots(figsize=(5, 3))
                                 ax_ders.plot(df_lgs["deneme_adi"], df_lgs[ders], marker='o', color='#673AB7', linewidth=2)
                                 ax_ders.set_title(f"{ders} Trendi", fontsize=10)
                                 ax_ders.yaxis.set_major_locator(MultipleLocator(1))
+                                ax_ders.tick_params(axis='x', rotation=45)
+                                for label in ax_ders.get_xticklabels():
+                                    label.set_ha('right')
+                                ax_ders.tick_params(axis='both', labelsize=8)
                                 ax_ders.grid(True, linestyle='--', alpha=0.4)
                                 max_val = 20 if ders in ["Türkçe Net", "Matematik Net", "Fen Net"] else 10
                                 ax_ders.set_ylim(-1, max_val + 1)
