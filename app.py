@@ -905,14 +905,30 @@ elif menu == "LGS Takip":
                             st.dataframe(tablo_s.style.format(precision=2), hide_index=True, use_container_width=True)
                             
                             html_tablo_s = tablo_s.to_html(border=1, index=False, justify='center', float_format='{:.2f}'.format)
+                            
+                            custom_css = """
+                            <style>
+                                body { font-family: Arial, sans-serif; font-size: 11px; color: #333; margin: 20px; }
+                                h2 { text-align: center; color: #444; font-size: 18px; margin-bottom: 20px; }
+                                table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                                th, td { border: 1px solid #bbb; padding: 6px 4px; text-align: center; white-space: nowrap; }
+                                th { background-color: #2b5797; color: white; font-weight: bold; font-size: 11px; }
+                                tr:nth-child(even) { background-color: #f2f2f2; }
+                                tr:hover { background-color: #e0e0e0; }
+                                .logo-container { text-align: center; margin-bottom: 10px; }
+                            </style>
+                            """
+                            
                             html_icerik_s = f"""
                             <html>
-                            <head><meta charset='utf-8'><title>{secilen_sinif_lgs} Sıralama Raporu</title></head>
+                            <head><meta charset='utf-8'><title>{secilen_sinif_lgs} Sıralama Raporu</title>
+                            {custom_css}
+                            </head>
                             <body onload='window.print()'>
-                                <div style="margin-bottom: 20px; overflow: hidden;">
-                                    {logo_html}
-                                    <h2 style='text-align:center;'>Sadiye ve Abdullah Tan Ortaokulu<br>{secilen_sinif_lgs} Sınıfı {secili_deneme_analiz} Sınavı Başarı Sıralaması</h2>
+                                <div class="logo-container">
+                                    {logo_html.replace('float: left; margin-right: 15px;', 'display: inline-block;')}
                                 </div>
+                                <h2>Sadiye ve Abdullah Tan Ortaokulu<br>{secilen_sinif_lgs} Sınıfı {secili_deneme_analiz} Sınavı Başarı Sıralaması</h2>
                                 {html_tablo_s}
                             </body>
                             </html>
@@ -940,7 +956,7 @@ elif menu == "LGS Takip":
                         
                         df_lgs["Türkçe Net"] = (df_lgs["turkce_d"] - (df_lgs["turkce_y"] / 3)).round(2)
                         df_lgs["Matematik Net"] = (df_lgs["mat_d"] - (df_lgs["mat_y"] / 3)).round(2)
-                        df_lgs["Fen Net"] = (df_s["fen_d"] - (df_lgs["fen_y"] / 3)).round(2)
+                        df_lgs["Fen Net"] = (df_lgs["fen_d"] - (df_lgs["fen_y"] / 3)).round(2)
                         df_lgs["Sosyal/İnkılap Net"] = (df_lgs["ink_d"] - (df_lgs["ink_y"] / 3)).round(2)
                         df_lgs["Din Net"] = (df_lgs["din_d"] - (df_lgs["din_y"] / 3)).round(2)
                         df_lgs["İngilizce Net"] = (df_lgs["ing_d"] - (df_lgs["ing_y"] / 3)).round(2)
@@ -1269,34 +1285,35 @@ elif menu == "LGS Takip":
                         lgs_pdf_html = f"""
                         <html>
                         <head><meta charset="utf-8"><style>
-                            body {{ font-family: Arial, sans-serif; margin: 35px; color: #333; }}
-                            .title-container {{ margin-bottom: 30px; overflow: hidden; }}
-                            .title {{ text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 5px; margin-top: 10px; }}
-                            .subtitle {{ text-align: center; font-size: 14px; color: #555; }}
-                            .card-box {{ display: flex; justify-content: space-between; gap: 15px; margin-bottom: 25px; }}
-                            .card {{ flex: 1; border: 1px solid #ccc; padding: 12px; text-align: center; background-color: #fafafa; border-radius: 5px; }}
-                            .card h4 {{ margin: 0 0 6px 0; font-size: 12px; color: #666; text-transform: uppercase; }}
-                            .card p {{ margin: 0; font-size: 18px; font-weight: bold; color: #111; }}
-                            .section-title {{ font-size: 14px; font-weight: bold; color: #fff; background-color: #2196F3; padding: 6px 10px; margin-top: 25px; border-radius: 3px; }}
-                            table {{ width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }}
-                            th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
-                            th {{ background-color: #f5f5f5; }}
-                            .graph-container {{ text-align: center; margin-top: 20px; }}
+                            body {{ font-family: Arial, sans-serif; font-size: 11px; color: #333; margin: 20px; }}
+                            .title-container {{ margin-bottom: 20px; text-align: center; }}
+                            .title {{ font-size: 18px; font-weight: bold; margin-bottom: 5px; color: #444; }}
+                            .subtitle {{ font-size: 12px; color: #555; }}
+                            .card-box {{ display: flex; justify-content: space-between; gap: 10px; margin-bottom: 20px; }}
+                            .card {{ flex: 1; border: 1px solid #ccc; padding: 10px; text-align: center; background-color: #f9f9f9; border-radius: 5px; }}
+                            .card h4 {{ margin: 0 0 4px 0; font-size: 11px; color: #666; text-transform: uppercase; }}
+                            .card p {{ margin: 0; font-size: 14px; font-weight: bold; color: #111; }}
+                            .section-title {{ font-size: 13px; font-weight: bold; color: #fff; background-color: #2b5797; padding: 5px 8px; margin-top: 20px; border-radius: 3px; }}
+                            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+                            th, td {{ border: 1px solid #bbb; padding: 6px 4px; text-align: center; white-space: nowrap; }}
+                            th {{ background-color: #2b5797; color: white; font-weight: bold; font-size: 11px; }}
+                            tr:nth-child(even) {{ background-color: #f2f2f2; }}
+                            .graph-container {{ text-align: center; margin-top: 15px; }}
                             .graph-img {{ width: 32%; display: inline-block; vertical-align: top; }}
-                            .pedagogic-box {{ font-size: 12px; line-height: 1.6; background-color: #f9fbfd; border-left: 4px solid #2196F3; padding: 15px; margin-top: 15px; }}
-                            .pedagogic-title {{ font-weight: bold; color: #111; margin-top: 10px; font-size: 13px; }}
+                            .pedagogic-box {{ font-size: 11px; line-height: 1.5; background-color: #f9fbfd; border-left: 4px solid #2b5797; padding: 12px; margin-top: 10px; }}
+                            .pedagogic-title {{ font-weight: bold; color: #111; margin-top: 8px; font-size: 12px; }}
                         </style></head>
                         <body onload="window.print()">
                             <div class="title-container">
-                                {logo_html}
+                                {logo_html.replace('float: left; margin-right: 15px;', 'display: inline-block;')}
                                 <div class="title">LGS HAZIRLIK SÜRECİ AKADEMİK RAPORU</div>
                                 <div class="subtitle">Sadiye ve Abdullah Tan Ortaokulu - Genel Süreç Analizi</div>
                             </div>
                             {pdf_risk_html}
-                            <table style="width:100%; border:none; margin-bottom:20px;">
+                            <table style="width:100%; border:none; margin-bottom:15px; background-color: white;">
                                 <tr>
-                                    <td style="text-align:left; border:none; font-size:14px;"><b>Öğrenci Adı Soyadı:</b> {secilen_ogr_analiz}</td>
-                                    <td style="text-align:right; border:none; font-size:14px;"><b>Sınıfı:</b> {secilen_sinif_lgs} | <b>Rapor Tarihi:</b> {date.today().strftime('%d.%m.%Y')}</td>
+                                    <td style="text-align:left; border:none; font-size:12px;"><b>Öğrenci Adı Soyadı:</b> {secilen_ogr_analiz}</td>
+                                    <td style="text-align:right; border:none; font-size:12px;"><b>Sınıfı:</b> {secilen_sinif_lgs} | <b>Rapor Tarihi:</b> {date.today().strftime('%d.%m.%Y')}</td>
                                 </tr>
                             </table>
                             <div class="card-box">
