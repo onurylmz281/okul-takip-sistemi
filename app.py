@@ -938,20 +938,23 @@ elif menu == "LGS Takip":
                         df_lgs["lgs_puani"] = pd.to_numeric(df_lgs["lgs_puani"], errors='coerce').fillna(200.0)
                         df_lgs["yuzdelik_dilim"] = pd.to_numeric(df_lgs["yuzdelik_dilim"], errors='coerce').fillna(100.0)
                         
-                        df_lgs["Türkçe Net"] = df_lgs["turkce_d"] - (df_lgs["turkce_y"] / 3)
-                        df_lgs["Matematik Net"] = df_lgs["mat_d"] - (df_lgs["mat_y"] / 3)
-                        df_lgs["Fen Net"] = df_lgs["fen_d"] - (df_lgs["fen_y"] / 3)
-                        df_lgs["Sosyal/İnkılap Net"] = df_lgs["ink_d"] - (df_lgs["ink_y"] / 3)
-                        df_lgs["Din Net"] = df_lgs["din_d"] - (df_lgs["din_y"] / 3)
-                        df_lgs["İngilizce Net"] = df_lgs["ing_d"] - (df_lgs["ing_y"] / 3)
-                        df_lgs["Toplam Net"] = df_lgs[["Türkçe Net", "Matematik Net", "Fen Net", "Sosyal/İnkılap Net", "Din Net", "İngilizce Net"]].sum(axis=1)
+                        df_lgs["Türkçe Net"] = (df_lgs["turkce_d"] - (df_lgs["turkce_y"] / 3)).round(2)
+                        df_lgs["Matematik Net"] = (df_lgs["mat_d"] - (df_lgs["mat_y"] / 3)).round(2)
+                        df_lgs["Fen Net"] = (df_s["fen_d"] - (df_lgs["fen_y"] / 3)).round(2)
+                        df_lgs["Sosyal/İnkılap Net"] = (df_lgs["ink_d"] - (df_lgs["ink_y"] / 3)).round(2)
+                        df_lgs["Din Net"] = (df_lgs["din_d"] - (df_lgs["din_y"] / 3)).round(2)
+                        df_lgs["İngilizce Net"] = (df_lgs["ing_d"] - (df_lgs["ing_y"] / 3)).round(2)
+                        
+                        df_lgs["Toplam D"] = df_lgs[["turkce_d", "mat_d", "fen_d", "ink_d", "din_d", "ing_d"]].sum(axis=1)
+                        df_lgs["Toplam Y"] = df_lgs[["turkce_y", "mat_y", "fen_y", "ink_y", "din_y", "ing_y"]].sum(axis=1)
+                        df_lgs["Toplam Net"] = df_lgs[["Türkçe Net", "Matematik Net", "Fen Net", "Sosyal/İnkılap Net", "Din Net", "İngilizce Net"]].sum(axis=1).round(2)
                         
                         son_deneme_verisi = df_lgs.iloc[-1]
                         ortalama_puan = round(df_lgs["lgs_puani"].mean(), 2)
                         en_yuksek_puan = round(df_lgs["lgs_puani"].max(), 2)
                         
-                        toplam_dogru = int(son_deneme_verisi[["turkce_d", "mat_d", "fen_d", "ink_d", "din_d", "ing_d"]].sum())
-                        toplam_yanlis = int(son_deneme_verisi[["turkce_y", "mat_y", "fen_y", "ink_y", "din_y", "ing_y"]].sum())
+                        toplam_dogru = int(son_deneme_verisi["Toplam D"])
+                        toplam_yanlis = int(son_deneme_verisi["Toplam Y"])
                         toplam_isaretlenen = toplam_dogru + toplam_yanlis
                         isabet_orani = (toplam_dogru / toplam_isaretlenen * 100) if toplam_isaretlenen > 0 else 0
                         
@@ -1018,13 +1021,41 @@ elif menu == "LGS Takip":
                                 st.markdown(f"<ul>{''.join(ivme_liste)}</ul>", unsafe_allow_html=True)
                             else:
                                 st.write("Son 3 sınav yöneliminin ölçülmesi için en az 3 sınav kaydı bulunmalıdır.")
+                                
+                            rename_dict_ind = {
+                                "deneme_adi": "Sınav",
+                                "turkce_d": "Türkçe D", "turkce_y": "Türkçe Y",
+                                "mat_d": "Matematik D", "mat_y": "Matematik Y",
+                                "fen_d": "Fen D", "fen_y": "Fen Y",
+                                "ink_d": "Sosyal/İnkılap D", "ink_y": "Sosyal/İnkılap Y",
+                                "din_d": "Din D", "din_y": "Din Y",
+                                "ing_d": "İngilizce D", "ing_y": "İngilizce Y",
+                                "lgs_puani": "LGS Puanı",
+                                "yuzdelik_dilim": "Yüzdelik Dilim (%)"
+                            }
+                            df_lgs_renamed = df_lgs.rename(columns=rename_dict_ind)
+                            cols_to_show = [
+                                "Sınav", 
+                                "Türkçe D", "Türkçe Y", "Türkçe Net",
+                                "Matematik D", "Matematik Y", "Matematik Net",
+                                "Fen D", "Fen Y", "Fen Net",
+                                "Sosyal/İnkılap D", "Sosyal/İnkılap Y", "Sosyal/İnkılap Net",
+                                "Din D", "Din Y", "Din Net",
+                                "İngilizce D", "İngilizce Y", "İngilizce Net",
+                                "Toplam D", "Toplam Y", "Toplam Net",
+                                "LGS Puanı", "Yüzdelik Dilim (%)"
+                            ]
+                            df_pdf_tablo = df_lgs_renamed[cols_to_show]
+                            
+                            st.write("#### 📊 Öğrenci Deneme Sınavları Karne Dökümü")
+                            st.dataframe(df_pdf_tablo.style.format(precision=2), hide_index=True, use_container_width=True)
                             
                             st.write("#### 📊 Süreç İlerleme Grafikleri")
                             col_g1, col_g2, col_g3 = st.columns(3)
                             
                             with col_g1:
                                 st.write("**LGS Puan Gelişimi**")
-                                fig_puan, ax_puan = plt.subplots(figsize=(5, 3))
+                                fig_puan, ax_puan = plt.subplots(figsize=(5, 5))
                                 ax_puan.plot(df_lgs["deneme_adi"], df_lgs["lgs_puani"], marker='o', color='#2196F3', linewidth=2)
                                 ax_puan.tick_params(axis='x', rotation=45)
                                 for label in ax_puan.get_xticklabels():
@@ -1041,7 +1072,7 @@ elif menu == "LGS Takip":
 
                             with col_g2:
                                 st.write("**Toplam Net Gelişimi**")
-                                fig_net, ax_net = plt.subplots(figsize=(5, 3))
+                                fig_net, ax_net = plt.subplots(figsize=(5, 5))
                                 ax_net.plot(df_lgs["deneme_adi"], df_lgs["Toplam Net"], marker='s', color='#4CAF50', linewidth=2)
                                 ax_net.yaxis.set_major_locator(MultipleLocator(1))
                                 ax_net.tick_params(axis='x', rotation=45)
@@ -1059,9 +1090,10 @@ elif menu == "LGS Takip":
 
                             with col_g3:
                                 st.write("**Yüzdelik Dilim Trendi (%)**")
-                                fig_yuzde, ax_yuzde = plt.subplots(figsize=(5, 3))
+                                fig_yuzde, ax_yuzde = plt.subplots(figsize=(5, 5))
                                 ax_yuzde.plot(df_lgs["deneme_adi"], df_lgs["yuzdelik_dilim"], marker='v', color='#FF9800', linewidth=2)
                                 ax_yuzde.invert_yaxis()
+                                ax_yuzde.yaxis.set_major_locator(MultipleLocator(0.5))
                                 ax_yuzde.tick_params(axis='x', rotation=45)
                                 for label in ax_yuzde.get_xticklabels():
                                     label.set_ha('right')
@@ -1080,7 +1112,7 @@ elif menu == "LGS Takip":
                             ders_grafikleri_html = ""
                             
                             for idx, ders in enumerate(ders_listesi):
-                                fig_ders, ax_ders = plt.subplots(figsize=(5, 3))
+                                fig_ders, ax_ders = plt.subplots(figsize=(5, 5))
                                 ax_ders.plot(df_lgs["deneme_adi"], df_lgs[ders], marker='o', color='#673AB7', linewidth=2)
                                 ax_ders.set_title(f"{ders} Trendi", fontsize=10)
                                 ax_ders.yaxis.set_major_locator(MultipleLocator(1))
@@ -1104,9 +1136,9 @@ elif menu == "LGS Takip":
 
                         with sub_tab2:
                             st.write("Karşılaştırılacak iki farklı deneme seçerek kafa kafaya (Head-to-Head) performans analizi yapabilirsiniz.")
-                            deneme_listesi = df_lgs["deneme_adi"].tolist()
-                            varsayilan_secim = deneme_listesi[-2:] if len(deneme_listesi) >= 2 else deneme_listesi
-                            karsilastirma_secimi = st.multiselect("Karşılaştırılacak İki Sınavı Seçin", deneme_listesi, default=varsayilan_secim)
+                            deneme_listesi_ui = df_lgs["deneme_adi"].tolist()
+                            varsayilan_secim = deneme_listesi_ui[-2:] if len(deneme_listesi_ui) >= 2 else deneme_listesi_ui
+                            karsilastirma_secimi = st.multiselect("Karşılaştırılacak İki Sınavı Seçin", deneme_listesi_ui, default=varsayilan_secim)
                             
                             if len(karsilastirma_secimi) != 2:
                                 st.warning("Lütfen tam olarak iki (2) adet deneme sınavı seçiniz.")
@@ -1221,8 +1253,7 @@ elif menu == "LGS Takip":
                                 st.write("#### 💾 Seçili Sınav Karşılaştırma Dökümünü PDF İndir")
                                 st.download_button("📄 Karşılaştırma Raporunu PDF İndir", html_karsilastirma, file_name=f"{secilen_ogr_analiz}_Karsilastirma.html", mime="text/html")
 
-                        df_pdf_tablo = df_lgs[["deneme_adi", "Türkçe Net", "Matematik Net", "Fen Net", "Sosyal/İnkılap Net", "Din Net", "İngilizce Net", "Toplam Net", "lgs_puani", "yuzdelik_dilim"]].rename(columns={"deneme_adi":"Sınav", "lgs_puani":"LGS Puanı", "yuzdelik_dilim": "Yüzdelik Dilim (%)"})
-                        html_table_lgs = df_pdf_tablo.to_html(border=1, index=False, justify='center')
+                        html_table_lgs = df_pdf_tablo.to_html(border=1, index=False, justify='center', float_format='{:.2f}'.format)
                         
                         pdf_ivme_metinleri = "<ul>" + "".join(ivme_liste).replace(":green[","<span style='color:green;font-weight:bold;'>").replace(":red[","<span style='color:red;font-weight:bold;'>").replace("]","</span>") + "</ul>" if len(df_lgs) >= 3 else "<p>Yetersiz veri.</p>"
                         
@@ -1275,7 +1306,9 @@ elif menu == "LGS Takip":
                                 <div class="card"><h4>Son Yüzdelik Dilim</h4><p>% {son_deneme_verisi['yuzdelik_dilim']:.2f}</p></div>
                             </div>
                             <div class="section-title">📊 Deneme Sınavları Net ve Skor Dağılım Geçmişi</div>
-                            {html_table_lgs}
+                            <div style="overflow-x:auto;">
+                                {html_table_lgs}
+                            </div>
                             <div class="section-title">📈 Ayrıştırılmış İlerleme ve Trend Grafikleri</div>
                             <div class="graph-container">
                                 <img class="graph-img" src="data:image/png;base64,{puan_trend_b64}">
