@@ -861,43 +861,43 @@ elif menu == "LGS Takip":
                             
                             df_s["Öğrenci"] = df_s["ogrenci_id"].apply(lambda x: next((ogr["ad_soyad"] for ogr in ogrenciler if ogr["id"] == x), "Bilinmiyor"))
                             
-                            df_s["Türkçe Net"] = (df_s["turkce_d"] - (df_s["turkce_y"] / 3)).round(2)
-                            df_s["Matematik Net"] = (df_s["mat_d"] - (df_s["mat_y"] / 3)).round(2)
-                            df_s["Fen Net"] = (df_s["fen_d"] - (df_s["fen_y"] / 3)).round(2)
-                            df_s["Sosyal/İnkılap Net"] = (df_s["ink_d"] - (df_s["ink_y"] / 3)).round(2)
-                            df_s["Din Net"] = (df_s["din_d"] - (df_s["din_y"] / 3)).round(2)
-                            df_s["İngilizce Net"] = (df_s["ing_d"] - (df_s["ing_y"] / 3)).round(2)
+                            df_s["Tür N"] = (df_s["turkce_d"] - (df_s["turkce_y"] / 3)).round(2)
+                            df_s["Mat N"] = (df_s["mat_d"] - (df_s["mat_y"] / 3)).round(2)
+                            df_s["Fen N"] = (df_s["fen_d"] - (df_s["fen_y"] / 3)).round(2)
+                            df_s["İnk N"] = (df_s["ink_d"] - (df_s["ink_y"] / 3)).round(2)
+                            df_s["Din N"] = (df_s["din_d"] - (df_s["din_y"] / 3)).round(2)
+                            df_s["İng N"] = (df_s["ing_d"] - (df_s["ing_y"] / 3)).round(2)
 
-                            df_s["Toplam D"] = df_s[["turkce_d", "mat_d", "fen_d", "ink_d", "din_d", "ing_d"]].sum(axis=1)
-                            df_s["Toplam Y"] = df_s[["turkce_y", "mat_y", "fen_y", "ink_y", "din_y", "ing_y"]].sum(axis=1)
-                            df_s["Toplam Net"] = df_s[["Türkçe Net", "Matematik Net", "Fen Net", "Sosyal/İnkılap Net", "Din Net", "İngilizce Net"]].sum(axis=1).round(2)
+                            df_s["Top D"] = df_s[["turkce_d", "mat_d", "fen_d", "ink_d", "din_d", "ing_d"]].sum(axis=1)
+                            df_s["Top Y"] = df_s[["turkce_y", "mat_y", "fen_y", "ink_y", "din_y", "ing_y"]].sum(axis=1)
+                            df_s["Top N"] = df_s[["Tür N", "Mat N", "Fen N", "İnk N", "Din N", "İng N"]].sum(axis=1).round(2)
                             
                             df_s = df_s.sort_values(by="lgs_puani", ascending=False).reset_index(drop=True)
                             df_s.index += 1
                             df_s = df_s.reset_index().rename(columns={"index": "Sınıf Derecesi"})
                             
                             rename_dict = {
-                                "turkce_d": "Türkçe D", "turkce_y": "Türkçe Y",
-                                "mat_d": "Matematik D", "mat_y": "Matematik Y",
+                                "turkce_d": "Tür D", "turkce_y": "Tür Y",
+                                "mat_d": "Mat D", "mat_y": "Mat Y",
                                 "fen_d": "Fen D", "fen_y": "Fen Y",
-                                "ink_d": "Sosyal/İnkılap D", "ink_y": "Sosyal/İnkılap Y",
+                                "ink_d": "İnk D", "ink_y": "İnk Y",
                                 "din_d": "Din D", "din_y": "Din Y",
-                                "ing_d": "İngilizce D", "ing_y": "İngilizce Y",
-                                "lgs_puani": "LGS Puanı",
-                                "yuzdelik_dilim": "Yüzdelik Dilim (%)"
+                                "ing_d": "İng D", "ing_y": "İng Y",
+                                "lgs_puani": "Puan",
+                                "yuzdelik_dilim": "Dilim(%)"
                             }
                             df_s = df_s.rename(columns=rename_dict)
 
                             col_order = [
                                 "Sınıf Derecesi", "Öğrenci",
-                                "Türkçe D", "Türkçe Y", "Türkçe Net",
-                                "Matematik D", "Matematik Y", "Matematik Net",
-                                "Fen D", "Fen Y", "Fen Net",
-                                "Sosyal/İnkılap D", "Sosyal/İnkılap Y", "Sosyal/İnkılap Net",
-                                "Din D", "Din Y", "Din Net",
-                                "İngilizce D", "İngilizce Y", "İngilizce Net",
-                                "Toplam D", "Toplam Y", "Toplam Net",
-                                "LGS Puanı", "Yüzdelik Dilim (%)"
+                                "Tür D", "Tür Y", "Tür N",
+                                "Mat D", "Mat Y", "Mat N",
+                                "Fen D", "Fen Y", "Fen N",
+                                "İnk D", "İnk Y", "İnk N",
+                                "Din D", "Din Y", "Din N",
+                                "İng D", "İng Y", "İng N",
+                                "Top D", "Top Y", "Top N",
+                                "Puan", "Dilim(%)"
                             ]
                             tablo_s = df_s[col_order]
                             
@@ -908,14 +908,15 @@ elif menu == "LGS Takip":
                             
                             custom_css = """
                             <style>
-                                body { font-family: Arial, sans-serif; font-size: 11px; color: #333; margin: 20px; }
-                                h2 { text-align: center; color: #444; font-size: 18px; margin-bottom: 20px; }
-                                table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                                th, td { border: 1px solid #bbb; padding: 6px 4px; text-align: center; white-space: nowrap; }
-                                th { background-color: #2b5797; color: white; font-weight: bold; font-size: 11px; }
+                                @page { size: landscape; margin: 10mm; }
+                                body { font-family: Arial, sans-serif; font-size: 9px; color: #333; margin: 0; }
+                                h2 { text-align: center; color: #444; font-size: 14px; margin-bottom: 10px; }
+                                table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
+                                th, td { border: 1px solid #bbb; padding: 2px 1px; text-align: center; word-wrap: break-word; font-size: 8px;}
+                                th { background-color: #2b5797; color: white; font-weight: bold; }
                                 tr:nth-child(even) { background-color: #f2f2f2; }
                                 tr:hover { background-color: #e0e0e0; }
-                                .logo-container { text-align: center; margin-bottom: 10px; }
+                                .logo-container { text-align: center; margin-bottom: 5px; }
                             </style>
                             """
                             
@@ -1040,26 +1041,26 @@ elif menu == "LGS Takip":
                                 
                             rename_dict_ind = {
                                 "deneme_adi": "Sınav",
-                                "turkce_d": "Türkçe D", "turkce_y": "Türkçe Y",
-                                "mat_d": "Matematik D", "mat_y": "Matematik Y",
-                                "fen_d": "Fen D", "fen_y": "Fen Y",
-                                "ink_d": "Sosyal/İnkılap D", "ink_y": "Sosyal/İnkılap Y",
-                                "din_d": "Din D", "din_y": "Din Y",
-                                "ing_d": "İngilizce D", "ing_y": "İngilizce Y",
-                                "lgs_puani": "LGS Puanı",
-                                "yuzdelik_dilim": "Yüzdelik Dilim (%)"
+                                "turkce_d": "Tür D", "turkce_y": "Tür Y", "Türkçe Net": "Tür N",
+                                "mat_d": "Mat D", "mat_y": "Mat Y", "Matematik Net": "Mat N",
+                                "fen_d": "Fen D", "fen_y": "Fen Y", "Fen Net": "Fen N",
+                                "ink_d": "İnk D", "ink_y": "İnk Y", "Sosyal/İnkılap Net": "İnk N",
+                                "din_d": "Din D", "din_y": "Din Y", "Din Net": "Din N",
+                                "ing_d": "İng D", "ing_y": "İng Y", "İngilizce Net": "İng N",
+                                "Toplam D": "Top D", "Toplam Y": "Top Y", "Toplam Net": "Top N",
+                                "lgs_puani": "Puan", "yuzdelik_dilim": "Dilim(%)"
                             }
                             df_lgs_renamed = df_lgs.rename(columns=rename_dict_ind)
                             cols_to_show = [
                                 "Sınav", 
-                                "Türkçe D", "Türkçe Y", "Türkçe Net",
-                                "Matematik D", "Matematik Y", "Matematik Net",
-                                "Fen D", "Fen Y", "Fen Net",
-                                "Sosyal/İnkılap D", "Sosyal/İnkılap Y", "Sosyal/İnkılap Net",
-                                "Din D", "Din Y", "Din Net",
-                                "İngilizce D", "İngilizce Y", "İngilizce Net",
-                                "Toplam D", "Toplam Y", "Toplam Net",
-                                "LGS Puanı", "Yüzdelik Dilim (%)"
+                                "Tür D", "Tür Y", "Tür N",
+                                "Mat D", "Mat Y", "Mat N",
+                                "Fen D", "Fen Y", "Fen N",
+                                "İnk D", "İnk Y", "İnk N",
+                                "Din D", "Din Y", "Din N",
+                                "İng D", "İng Y", "İng N",
+                                "Top D", "Top Y", "Top N",
+                                "Puan", "Dilim(%)"
                             ]
                             df_pdf_tablo = df_lgs_renamed[cols_to_show]
                             
@@ -1108,7 +1109,11 @@ elif menu == "LGS Takip":
                                 st.write("**Yüzdelik Dilim Trendi (%)**")
                                 fig_yuzde, ax_yuzde = plt.subplots(figsize=(5, 5))
                                 ax_yuzde.plot(df_lgs["deneme_adi"], df_lgs["yuzdelik_dilim"], marker='v', color='#FF9800', linewidth=2)
-                                ax_yuzde.invert_yaxis()
+                                
+                                y_max = min(100.0, df_lgs["yuzdelik_dilim"].max() + 2.0)
+                                y_min = max(0.0, df_lgs["yuzdelik_dilim"].min() - 2.0)
+                                ax_yuzde.set_ylim(y_max, y_min) 
+                                
                                 ax_yuzde.yaxis.set_major_locator(MultipleLocator(0.5))
                                 ax_yuzde.tick_params(axis='x', rotation=45)
                                 for label in ax_yuzde.get_xticklabels():
@@ -1285,7 +1290,8 @@ elif menu == "LGS Takip":
                         lgs_pdf_html = f"""
                         <html>
                         <head><meta charset="utf-8"><style>
-                            body {{ font-family: Arial, sans-serif; font-size: 11px; color: #333; margin: 20px; }}
+                            @page {{ size: landscape; margin: 10mm; }}
+                            body {{ font-family: Arial, sans-serif; font-size: 10px; color: #333; margin: 0; }}
                             .title-container {{ margin-bottom: 20px; text-align: center; }}
                             .title {{ font-size: 18px; font-weight: bold; margin-bottom: 5px; color: #444; }}
                             .subtitle {{ font-size: 12px; color: #555; }}
@@ -1294,9 +1300,9 @@ elif menu == "LGS Takip":
                             .card h4 {{ margin: 0 0 4px 0; font-size: 11px; color: #666; text-transform: uppercase; }}
                             .card p {{ margin: 0; font-size: 14px; font-weight: bold; color: #111; }}
                             .section-title {{ font-size: 13px; font-weight: bold; color: #fff; background-color: #2b5797; padding: 5px 8px; margin-top: 20px; border-radius: 3px; }}
-                            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-                            th, td {{ border: 1px solid #bbb; padding: 6px 4px; text-align: center; white-space: nowrap; }}
-                            th {{ background-color: #2b5797; color: white; font-weight: bold; font-size: 11px; }}
+                            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }}
+                            th, td {{ border: 1px solid #bbb; padding: 2px 1px; text-align: center; white-space: nowrap; font-size: 8px; }}
+                            th {{ background-color: #2b5797; color: white; font-weight: bold; }}
                             tr:nth-child(even) {{ background-color: #f2f2f2; }}
                             .graph-container {{ text-align: center; margin-top: 15px; }}
                             .graph-img {{ width: 32%; display: inline-block; vertical-align: top; }}
