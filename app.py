@@ -861,23 +861,50 @@ elif menu == "LGS Takip":
                             
                             df_s["Öğrenci"] = df_s["ogrenci_id"].apply(lambda x: next((ogr["ad_soyad"] for ogr in ogrenciler if ogr["id"] == x), "Bilinmiyor"))
                             
-                            df_s["Türkçe Net"] = df_s["turkce_d"] - (df_s["turkce_y"] / 3)
-                            df_s["Matematik Net"] = df_s["mat_d"] - (df_s["mat_y"] / 3)
-                            df_s["Fen Net"] = df_s["fen_d"] - (df_s["fen_y"] / 3)
-                            df_s["Sosyal/İnkılap Net"] = df_s["ink_d"] - (df_s["ink_y"] / 3)
-                            df_s["Din Net"] = df_s["din_d"] - (df_s["din_y"] / 3)
-                            df_s["İngilizce Net"] = df_s["ing_d"] - (df_s["ing_y"] / 3)
-                            df_s["Toplam Net"] = df_s[["Türkçe Net", "Matematik Net", "Fen Net", "Sosyal/İnkılap Net", "Din Net", "İngilizce Net"]].sum(axis=1)
+                            df_s["Türkçe Net"] = (df_s["turkce_d"] - (df_s["turkce_y"] / 3)).round(2)
+                            df_s["Matematik Net"] = (df_s["mat_d"] - (df_s["mat_y"] / 3)).round(2)
+                            df_s["Fen Net"] = (df_s["fen_d"] - (df_s["fen_y"] / 3)).round(2)
+                            df_s["Sosyal/İnkılap Net"] = (df_s["ink_d"] - (df_s["ink_y"] / 3)).round(2)
+                            df_s["Din Net"] = (df_s["din_d"] - (df_s["din_y"] / 3)).round(2)
+                            df_s["İngilizce Net"] = (df_s["ing_d"] - (df_s["ing_y"] / 3)).round(2)
+
+                            df_s["Toplam D"] = df_s[["turkce_d", "mat_d", "fen_d", "ink_d", "din_d", "ing_d"]].sum(axis=1)
+                            df_s["Toplam Y"] = df_s[["turkce_y", "mat_y", "fen_y", "ink_y", "din_y", "ing_y"]].sum(axis=1)
+                            df_s["Toplam Net"] = df_s[["Türkçe Net", "Matematik Net", "Fen Net", "Sosyal/İnkılap Net", "Din Net", "İngilizce Net"]].sum(axis=1).round(2)
                             
                             df_s = df_s.sort_values(by="lgs_puani", ascending=False).reset_index(drop=True)
                             df_s.index += 1
                             df_s = df_s.reset_index().rename(columns={"index": "Sınıf Derecesi"})
                             
-                            tablo_s = df_s[["Sınıf Derecesi", "Öğrenci", "Türkçe Net", "Matematik Net", "Fen Net", "Sosyal/İnkılap Net", "Din Net", "İngilizce Net", "Toplam Net", "lgs_puani", "yuzdelik_dilim"]].rename(columns={"lgs_puani": "LGS Puanı", "yuzdelik_dilim": "Yüzdelik Dilim (%)"})
-                            st.subheader(f"🏆 {secili_deneme_analiz} Sınavı - Başarı ve Puan Sıralaması")
-                            st.dataframe(tablo_s, hide_index=True, use_container_width=True)
+                            rename_dict = {
+                                "turkce_d": "Türkçe D", "turkce_y": "Türkçe Y",
+                                "mat_d": "Matematik D", "mat_y": "Matematik Y",
+                                "fen_d": "Fen D", "fen_y": "Fen Y",
+                                "ink_d": "Sosyal/İnkılap D", "ink_y": "Sosyal/İnkılap Y",
+                                "din_d": "Din D", "din_y": "Din Y",
+                                "ing_d": "İngilizce D", "ing_y": "İngilizce Y",
+                                "lgs_puani": "LGS Puanı",
+                                "yuzdelik_dilim": "Yüzdelik Dilim (%)"
+                            }
+                            df_s = df_s.rename(columns=rename_dict)
+
+                            col_order = [
+                                "Sınıf Derecesi", "Öğrenci",
+                                "Türkçe D", "Türkçe Y", "Türkçe Net",
+                                "Matematik D", "Matematik Y", "Matematik Net",
+                                "Fen D", "Fen Y", "Fen Net",
+                                "Sosyal/İnkılap D", "Sosyal/İnkılap Y", "Sosyal/İnkılap Net",
+                                "Din D", "Din Y", "Din Net",
+                                "İngilizce D", "İngilizce Y", "İngilizce Net",
+                                "Toplam D", "Toplam Y", "Toplam Net",
+                                "LGS Puanı", "Yüzdelik Dilim (%)"
+                            ]
+                            tablo_s = df_s[col_order]
                             
-                            html_tablo_s = tablo_s.to_html(border=1, index=False, justify='center')
+                            st.subheader(f"🏆 {secili_deneme_analiz} Sınavı - Başarı ve Puan Sıralaması")
+                            st.dataframe(tablo_s.style.format(precision=2), hide_index=True, use_container_width=True)
+                            
+                            html_tablo_s = tablo_s.to_html(border=1, index=False, justify='center', float_format='{:.2f}'.format)
                             html_icerik_s = f"""
                             <html>
                             <head><meta charset='utf-8'><title>{secilen_sinif_lgs} Sıralama Raporu</title></head>
