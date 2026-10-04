@@ -716,7 +716,7 @@ elif menu == "LGS Takip":
                 ogr_secenekleri = {ogr["ad_soyad"]: ogr["id"] for ogr in ogrenciler}
                 ogr_idler = [ogr["id"] for ogr in ogrenciler]
                 
-                tab_lgs1, tab_lgs2, tab_lgs3 = st.tabs(["📝 Deneme Notu İşlem Paneli", "📊 Sınıf Genel Sıralaması", "🎯 Öğrenci Özel Analizi"])
+                tab_lgs1, tab_lgs2, tab_lgs3, tab_lgs4 = st.tabs(["📝 Deneme Notu İşlem Paneli", "📊 Sınıf Genel Sıralaması", "🎯 Öğrenci Özel Analizi", "📞 Aylık Veli Görüşme Tutanağı"])
                 
                 # --- LGS TAB 1: DENEME GİRİŞ/DÜZENLEME ---
                 with tab_lgs1:
@@ -1361,6 +1361,131 @@ elif menu == "LGS Takip":
                             file_name=f"{secilen_ogr_analiz}_LGS_Akademik_Raporu.html",
                             mime="text/html"
                         )
+                        
+                # --- LGS TAB 4: AYLIK VELİ GÖRÜŞME TUTANAĞI ---
+                with tab_lgs4:
+                    st.subheader(f"📞 {secilen_sinif_lgs} Sınıfı - Veli Görüşme Kayıtları")
+                    
+                    v_tab1, v_tab2 = st.tabs(["➕ Yeni Görüşme Ekle", "📄 Aylık Tutanak Dökümü ve İndir"])
+                    
+                    with v_tab1:
+                        with st.form("lgs_veli_form", clear_on_submit=True):
+                            secilen_ogr_v = st.selectbox("Öğrenci Seçin", list(ogr_secenekleri.keys()), key="v_ogr")
+                            veli_bilgisi = st.text_input("Veli Ad-Soyad / Yakınlık (Örn: Mehmet Yılmaz - Babası)")
+                            gorusme_tarihi = st.date_input("Görüşme Tarihi", date.today())
+                            konu_ozeti = st.text_area("Görüşme Konusu / Özeti")
+                            
+                            kaydet_v = st.form_submit_button("Tutanağa Kaydet", type="primary")
+                            
+                            if kaydet_v:
+                                if not veli_bilgisi or not konu_ozeti:
+                                    st.warning("Veli bilgisi ve konu özeti alanları boş bırakılamaz.")
+                                else:
+                                    try:
+                                        supabase.table("lgs_veli_gorusmeleri").insert({
+                                            "ogrenci_id": ogr_secenekleri[secilen_ogr_v],
+                                            "veli_bilgisi": veli_bilgisi,
+                                            "konu_ozeti": konu_ozeti,
+                                            "tarih": str(gorusme_tarihi)
+                                        }).execute()
+                                        st.success("Kayıt işlendi.")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Kayıt hatası: {str(e)}")
+                                        
+                    with v_tab2:
+                        aylar = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
+                        suanki_ay = date.today().month
+                        suanki_yil = date.today().year
+                        
+                        col_ay, col_yil = st.columns(2)
+                        secilen_ay_isim = col_ay.selectbox("Tutanak Ayı", aylar, index=suanki_ay-1)
+                        secilen_yil = col_yil.number_input("Tutanak Yılı", min_value=2024, max_value=2035, value=suanki_yil, step=1)
+                        
+                        secilen_ay_index = aylar.index(secilen_ay_isim) + 1
+                        
+                        try:
+                            v_res = supabase.table("lgs_veli_gorusmeleri").select("*").in_("ogrenci_id", ogr_idler).execute()
+                            
+                            if not v_res.data:
+                                st.info("Kayıt bulunamadı.")
+                            else:
+                                df_v = pd.DataFrame(v_res.data)
+                                df_v['tarih'] = pd.to_datetime(df_v['tarih'])
+                                
+                                df_filtered = df_v[(df_v['tarih'].dt.month == secilen_ay_index) & (df_v['tarih'].dt.year == secilen_yil)]
+                                
+                                if df_filtered.empty:
+                                    st.info("Kayıt bulunmuyor.")
+                                else:
+                                    reverse_ogr = {v: k for k, v in ogr_secenekleri.items()}
+                                    df_filtered = df_filtered.sort_values(by="tarih")
+                                    
+                                    tutanak_verisi = []
+                                    s_no = 1
+                                    for _, row in df_filtered.iterrows():
+                                        tutanak_verisi.append({
+                                            "S.No": s_no,
+                                            "Veli Ad-Soyad/Yakınlık": row["veli_bilgisi"],
+                                            "Öğrenci Ad-Soyad": reverse_ogr.get(row["ogrenci_id"], "Bilinmiyor"),
+                                            "Görüşme Konusu/Özeti": row["konu_ozeti"]
+                                        })
+                                        s_no += 1
+                                        
+                                    df_tutanak = pd.DataFrame(tutanak_verisi)
+                                    st.dataframe(df_tutanak, hide_index=True, use_container_width=True)
+                                    
+                                    satirlar_html = ""
+                                    for r in tutanak_verisi:
+                                        satirlar_html += f"""
+                                        <tr>
+                                            <td class='sno'>{r['S.No']}</td>
+                                            <td>{r['Veli Ad-Soyad/Yakınlık']}</td>
+                                            <td>{r['Öğrenci Ad-Soyad']}</td>
+                                            <td>{r['Görüşme Konusu/Özeti']}</td>
+                                        </tr>
+                                        """
+                                        
+                                    html_tutanak = f"""
+                                    <html>
+                                    <head><meta charset="utf-8">
+                                    <style>
+                                        body {{ font-family: Arial, sans-serif; margin: 40px; color: #000; }}
+                                        .baslik {{ text-align: center; font-weight: bold; font-size: 18px; margin-bottom: 20px; }}
+                                        table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+                                        th, td {{ border: 1px solid black; padding: 12px; font-size: 14px; text-align: left; vertical-align: top; }}
+                                        th {{ text-align: center; font-weight: bold; background-color: #fff; }}
+                                        .sno {{ text-align: center; width: 5%; font-weight: bold; }}
+                                    </style>
+                                    </head>
+                                    <body onload="window.print()">
+                                        <div class="baslik">{secilen_ay_isim.upper()} AYLIK VELİ GÖRÜŞME TUTANAĞI</div>
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th class='sno'>S.No</th>
+                                                    <th>Veli Ad-Soyad/Yakınlık</th>
+                                                    <th>Öğrenci Ad-Soyad</th>
+                                                    <th>Görüşme Konusu/Özeti</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {satirlar_html}
+                                            </tbody>
+                                        </table>
+                                    </body>
+                                    </html>
+                                    """
+                                    st.divider()
+                                    st.download_button(
+                                        label="📄 Aylık Tutanağı PDF Olarak İndir (Çıktı Al)",
+                                        data=html_tutanak,
+                                        file_name=f"{secilen_sinif_lgs}_{secilen_ay_isim}_Veli_Tutanagi.html",
+                                        mime="text/html"
+                                    )
+                        except Exception as e:
+                            st.error(f"Sistem hatası: {str(e)}")
+
         except Exception as e:
             st.error(f"Sistem Hatası: LGS veritabanına erişilemedi. Detay: {str(e)}")
 
