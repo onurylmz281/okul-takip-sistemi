@@ -983,7 +983,7 @@ elif menu == "LGS Takip":
                         en_istikrarsiz_ders = std_sapmalar.idxmax().replace(" Net", "")
                         en_sapma_degeri = std_sapmalar.max()
                         
-                        sub_tab1, sub_tab2 = st.tabs(["📊 Genel Süreç Analiz Raporu", "⚖️ Gelişmiş Sınav Karşılaştırma (Kafa Kafaya)"])
+                        sub_tab1, sub_tab2 = st.tabs(["📊 Genel Süreç Analiz Raporu", "⚖️️ Gelişmiş Sınav Karşılaştırma (Kafa Kafaya)"])
                         
                         with sub_tab1:
                             col_m1, col_m2, col_m3, col_m4 = st.columns(4)
@@ -1366,7 +1366,7 @@ elif menu == "LGS Takip":
                 with tab_lgs4:
                     st.subheader(f"📞 {secilen_sinif_lgs} Sınıfı - Veli Görüşme Kayıtları")
                     
-                    v_tab1, v_tab2 = st.tabs(["➕ Yeni Görüşme Ekle", "📄 Aylık Tutanak Dökümü ve İndir"])
+                    v_tab1, v_tab2, v_tab3 = st.tabs(["➕ Yeni Görüşme Ekle", "📄 Aylık Tutanak Dökümü ve İndir", "✏️ Kayıt Düzenle / Sil"])
                     
                     with v_tab1:
                         with st.form("lgs_veli_form", clear_on_submit=True):
@@ -1388,7 +1388,7 @@ elif menu == "LGS Takip":
                                             "konu_ozeti": konu_ozeti,
                                             "tarih": str(gorusme_tarihi)
                                         }).execute()
-                                        st.success("Kayıt işlendi.")
+                                        st.success("✅ Kayıt başarıyla işlendi.")
                                         st.rerun()
                                     except Exception as e:
                                         st.error(f"Kayıt hatası: {str(e)}")
@@ -1408,7 +1408,7 @@ elif menu == "LGS Takip":
                             v_res = supabase.table("lgs_veli_gorusmeleri").select("*").in_("ogrenci_id", ogr_idler).execute()
                             
                             if not v_res.data:
-                                st.info("Kayıt bulunamadı.")
+                                st.info("Bu sınıfa ait tutanak kaydı bulunamadı.")
                             else:
                                 df_v = pd.DataFrame(v_res.data)
                                 df_v['tarih'] = pd.to_datetime(df_v['tarih'])
@@ -1416,7 +1416,7 @@ elif menu == "LGS Takip":
                                 df_filtered = df_v[(df_v['tarih'].dt.month == secilen_ay_index) & (df_v['tarih'].dt.year == secilen_yil)]
                                 
                                 if df_filtered.empty:
-                                    st.info("Kayıt bulunmuyor.")
+                                    st.info(f"{secilen_ay_isim} {secilen_yil} dönemine ait tutanak kaydı bulunmuyor.")
                                 else:
                                     reverse_ogr = {v: k for k, v in ogr_secenekleri.items()}
                                     df_filtered = df_filtered.sort_values(by="tarih")
@@ -1451,15 +1451,19 @@ elif menu == "LGS Takip":
                                     <head><meta charset="utf-8">
                                     <style>
                                         body {{ font-family: Arial, sans-serif; margin: 40px; color: #000; }}
-                                        .baslik {{ text-align: center; font-weight: bold; font-size: 18px; margin-bottom: 20px; }}
-                                        table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+                                        .header-container {{ text-align: center; margin-bottom: 20px; }}
+                                        .baslik {{ font-weight: bold; font-size: 18px; margin-top: 10px; }}
+                                        table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
                                         th, td {{ border: 1px solid black; padding: 12px; font-size: 14px; text-align: left; vertical-align: top; }}
-                                        th {{ text-align: center; font-weight: bold; background-color: #fff; }}
+                                        th {{ text-align: center; font-weight: bold; background-color: #eee; }}
                                         .sno {{ text-align: center; width: 5%; font-weight: bold; }}
                                     </style>
                                     </head>
                                     <body onload="window.print()">
-                                        <div class="baslik">{secilen_ay_isim.upper()} AYLIK VELİ GÖRÜŞME TUTANAĞI</div>
+                                        <div class="header-container">
+                                            {logo_html.replace('float: left; margin-right: 15px;', 'display: inline-block;')}
+                                            <div class="baslik">{secilen_ay_isim.upper()} AYLIK VELİ GÖRÜŞME TUTANAĞI</div>
+                                        </div>
                                         <table>
                                             <thead>
                                                 <tr>
@@ -1484,7 +1488,59 @@ elif menu == "LGS Takip":
                                         mime="text/html"
                                     )
                         except Exception as e:
-                            st.error(f"Sistem hatası: {str(e)}")
+                            st.error(f"Kayıtlar çekilirken sistem hatası oluştu: {str(e)}")
+
+                    with v_tab3:
+                        try:
+                            v_res_edit = supabase.table("lgs_veli_gorusmeleri").select("*").in_("ogrenci_id", ogr_idler).execute()
+                            if not v_res_edit.data:
+                                st.info("Bu sınıfta düzenlenecek veya silinecek bir veli görüşme kaydı bulunmuyor.")
+                            else:
+                                reverse_ogr_edit = {v: k for k, v in ogr_secenekleri.items()}
+                                gorusme_secenekleri = {}
+                                
+                                for g in v_res_edit.data:
+                                    o_ad = reverse_ogr_edit.get(g["ogrenci_id"], "Bilinmiyor")
+                                    etiket = f"{o_ad} | {g['tarih']} | {g['veli_bilgisi']}"
+                                    gorusme_secenekleri[etiket] = g
+                                
+                                secilen_etiket = st.selectbox("İşlem Yapılacak Kaydı Seçin", list(gorusme_secenekleri.keys()))
+                                s_kayit = gorusme_secenekleri[secilen_etiket]
+                                
+                                col_del1, col_del2 = st.columns([4, 1])
+                                with col_del2:
+                                    if st.button("🗑️ Bu Kaydı Sil"):
+                                        try:
+                                            supabase.table("lgs_veli_gorusmeleri").delete().eq("id", s_kayit["id"]).execute()
+                                            st.success("✅ Kayıt başarıyla silindi.")
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Silme hatası: {str(e)}")
+                                            
+                                with st.form("edit_veli_form"):
+                                    st.write(f"**{reverse_ogr_edit.get(s_kayit['ogrenci_id'], '')}** isimli öğrencinin kaydını düzenliyorsunuz:")
+                                    
+                                    yeni_veli = st.text_input("Veli Ad-Soyad / Yakınlık", value=s_kayit["veli_bilgisi"])
+                                    mevcut_t = pd.to_datetime(s_kayit["tarih"]).date()
+                                    yeni_tarih = st.date_input("Görüşme Tarihi", value=mevcut_t)
+                                    yeni_konu = st.text_area("Görüşme Konusu / Özeti", value=s_kayit["konu_ozeti"])
+                                    
+                                    if st.form_submit_button("Değişiklikleri Kaydet", type="primary"):
+                                        if not yeni_veli or not yeni_konu:
+                                            st.warning("Veli bilgisi ve konu özeti boş olamaz.")
+                                        else:
+                                            try:
+                                                supabase.table("lgs_veli_gorusmeleri").update({
+                                                    "veli_bilgisi": yeni_veli,
+                                                    "tarih": str(yeni_tarih),
+                                                    "konu_ozeti": yeni_konu
+                                                }).eq("id", s_kayit["id"]).execute()
+                                                st.success("✅ Kayıt başarıyla güncellendi.")
+                                                st.rerun()
+                                            except Exception as e:
+                                                st.error(f"Güncelleme hatası: {str(e)}")
+                        except Exception as e:
+                            st.error(f"Veriler çekilirken hata oluştu: {str(e)}")
 
         except Exception as e:
             st.error(f"Sistem Hatası: LGS veritabanına erişilemedi. Detay: {str(e)}")
