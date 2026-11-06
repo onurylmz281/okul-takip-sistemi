@@ -151,7 +151,7 @@ if menu == "Öğrenci Yönetimi":
             
             if kaydet_btn and yeni_ogrenci:
                 try:
-                    supabase.table("ogrenciler").insert({"ad_soyad": yeni_ogrenci, "sinif": secilen_sinif}).execute()
+                    supabase.table("ogrenciler").insert({"ad_soyad": yeni_ogrenci.strip(), "sinif": secilen_sinif}).execute()
                     st.success(f"✅ {yeni_ogrenci} sisteme başarıyla eklendi.")
                     st.rerun()
                 except Exception as e:
@@ -169,7 +169,7 @@ if menu == "Öğrenci Yönetimi":
             st.error(f"Öğrenci listesi yüklenemedi: {str(e)}")
 
     with tab_sil:
-        st.warning("⚠️ Dikkat: Seçilen öğrencileri sildiğinizde, bu öğrencilere ait tüm not, ödev ve LGS deneme kayıtları kalıcı olarak silinir.")
+        st.warning("⚠️ Dikkat: Seçilen öğrencileri sildiğinizde, bu öğrencilere ait tüm not, ödev, veli görüşmesi ve LGS deneme kayıtları kalıcı olarak silinir.")
         secilen_sinif_sil = st.selectbox("Sınıf Seçin", sinif_listesi, key="ogr_sil_sinif")
         try:
             ogrenciler_sil_res = supabase.table("ogrenciler").select("id, ad_soyad").eq("sinif", secilen_sinif_sil).execute()
@@ -187,6 +187,7 @@ if menu == "Öğrenci Yönetimi":
                             supabase.table("notlar").delete().in_("ogrenci_id", silinecek_ogr_id_list).execute()
                             supabase.table("odev_teslimleri").delete().in_("ogrenci_id", silinecek_ogr_id_list).execute()
                             supabase.table("lgs_denemeleri").delete().in_("ogrenci_id", silinecek_ogr_id_list).execute()
+                            supabase.table("lgs_veli_gorusmeleri").delete().in_("ogrenci_id", silinecek_ogr_id_list).execute()
                             supabase.table("ogrenciler").delete().in_("id", silinecek_ogr_id_list).execute()
                             st.success(f"✅ Seçilen {len(silinecek_ogrenciler_ad)} öğrenci ve verileri tamamen silindi.")
                             st.rerun()
@@ -222,6 +223,9 @@ elif menu == "Öğrenci Profil Paneli":
             df_html_notlar = "<p>Not verisi bulunamadı.</p>"
             if notlar_res.data:
                 df_profil_notlar = pd.DataFrame(notlar_res.data)
+                # Mükerrer branş kaydı varsa en güncel olanı tut
+                df_profil_notlar = df_profil_notlar.sort_values(by="id").drop_duplicates(subset=["brans"], keep="last")
+                
                 df_gosterim = df_profil_notlar.rename(columns={
                     "brans": "Branş", "sinav_1": "1. Yazılı", "sinav_2": "2. Yazılı", 
                     "perf_1": "1. Performans", "perf_2": "2. Performans", "proje": "Proje"
@@ -253,9 +257,10 @@ elif menu == "Öğrenci Profil Paneli":
             
             if odevler_res.data:
                 df_odevler_all = pd.DataFrame(odevler_res.data)
+                df_odevler_all = df_odevler_all.sort_values(by="id").drop_duplicates(subset=["odev_id"], keep="last")
                 toplam_odev = len(df_odevler_all)
-                yapti_sayisi = sum(1 for o in odevler_res.data if o["durum"] == "Yaptı")
-                odev_orani = round((yapti_sayisi / toplam_odev) * 100, 1)
+                yapti_sayisi = sum(1 for _, o in df_odevler_all.iterrows() if o["durum"] == "Yaptı")
+                odev_orani = round((yapti_sayisi / toplam_odev) * 100, 1) if toplam_odev > 0 else 0
                 
                 st.divider()
                 st.subheader("📚 Ödev İstatistikleri ve Ders Bazlı Dağılım Paneli")
@@ -266,23 +271,26 @@ elif menu == "Öğrenci Profil Paneli":
                 with col_f2:
                     filtre_durum = st.selectbox("Ödev Durumu", ["Tüm Durumlar", "Yaptı", "Yarım", "Yapmadı", "Gelmedi"], key="prof_hw_durum")
                 
-                odev_detay_res = supabase.table("odev_teslimleri").select("durum, ogretmen_notu, odevler(odev_adi, brans)").eq("ogrenci_id", ogr_id).execute()
+                odev_detay_res = supabase.table("odev_teslimleri").select("id, odev_id, durum, ogretmen_notu, odevler(odev_adi, brans)").eq("ogrenci_id", ogr_id).execute()
                 detay_liste = []
-                for d in odev_detay_res.data:
-                    odev_bilgisi = d.get("odevler") or {}
-                    detay_liste.append({
-                        "Branş": odev_bilgisi.get("brans", ""),
-                        "Ödev Adı": odev_bilgisi.get("odev_adi", ""),
-                        "Durum": d.get("durum", ""),
-                        "Açıklama/Not": d.get("ogretmen_notu", "")
-                    })
+                if odev_detay_res.data:
+                    df_detay_raw = pd.DataFrame(odev_detay_res.data).sort_values(by="id").drop_duplicates(subset=["odev_id"], keep="last")
+                    for _, d in df_detay_raw.iterrows():
+                        odev_bilgisi = d.get("odevler") or {}
+                        detay_liste.append({
+                            "Branş": odev_bilgisi.get("brans", ""),
+                            "Ödev Adı": odev_bilgisi.get("odev_adi", ""),
+                            "Durum": d.get("durum", ""),
+                            "Açıklama/Not": d.get("ogretmen_notu", "")
+                        })
                 df_full_odev = pd.DataFrame(detay_liste)
                 
                 df_filtered_odev = df_full_odev.copy()
-                if filtre_brans != "Tüm Dersler":
-                    df_filtered_odev = df_filtered_odev[df_filtered_odev["Branş"] == filtre_brans]
-                if filtre_durum != "Tüm Durumlar":
-                    df_filtered_odev = df_filtered_odev[df_filtered_odev["Durum"] == filtre_durum]
+                if not df_filtered_odev.empty:
+                    if filtre_brans != "Tüm Dersler":
+                        df_filtered_odev = df_filtered_odev[df_filtered_odev["Branş"] == filtre_brans]
+                    if filtre_durum != "Tüm Durumlar":
+                        df_filtered_odev = df_filtered_odev[df_filtered_odev["Durum"] == filtre_durum]
                 
                 col_grafik, col_tablo = st.columns([5, 5])
                 
@@ -481,9 +489,16 @@ elif menu == "Not Takip":
             
             if st.button("Notları Veri Tabanına Kaydet", type="primary"):
                 try:
+                    # Kayıt anında mevcut kayıtları tekrar kontrol et (mükerrer kaydı önlemek için)
+                    guncel_notlar_res = supabase.table("notlar").select("id, ogrenci_id").eq("brans", secilen_brans).in_("ogrenci_id", ogrenci_idler).execute()
+                    db_not_map = {n["ogrenci_id"]: n["id"] for n in guncel_notlar_res.data} if guncel_notlar_res.data else {}
+                    
                     for index, row in duzenlenmis_df.iterrows():
+                        ogr_id_int = int(row["Öğrenci ID"])
+                        kayit_id = db_not_map.get(ogr_id_int, row["Kayıt ID"])
+                        
                         kayit_verisi = {
-                            "ogrenci_id": int(row["Öğrenci ID"]),
+                            "ogrenci_id": ogr_id_int,
                             "brans": secilen_brans,
                             "sinav_1": float(row["1. Yazılı"]) if pd.notnull(row["1. Yazılı"]) and str(row["1. Yazılı"]).strip() != "" else None,
                             "sinav_2": float(row["2. Yazılı"]) if pd.notnull(row["2. Yazılı"]) and str(row["2. Yazılı"]).strip() != "" else None,
@@ -494,15 +509,16 @@ elif menu == "Not Takip":
                         
                         not_var_mi = any(v is not None for k, v in kayit_verisi.items() if k not in ["ogrenci_id", "brans"])
                         
-                        if pd.notnull(row["Kayıt ID"]):
+                        if pd.notnull(kayit_id):
                             if not_var_mi:
-                                supabase.table("notlar").update(kayit_verisi).eq("id", int(row["Kayıt ID"])).execute()
+                                supabase.table("notlar").update(kayit_verisi).eq("id", int(kayit_id)).execute()
                             else:
-                                supabase.table("notlar").delete().eq("id", int(row["Kayıt ID"])).execute()
+                                supabase.table("notlar").delete().eq("id", int(kayit_id)).execute()
                         elif not_var_mi:
                             supabase.table("notlar").insert(kayit_verisi).execute()
                             
                     st.success("✅ Notlar başarıyla kaydedildi.")
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Notlar kaydedilirken hata oluştu: {str(e)}")
     except Exception as e:
@@ -600,24 +616,30 @@ elif menu == "Ödev Takip":
                     
                     if st.button("Değişiklikleri Veri Tabanına Kaydet", type="primary"):
                         try:
+                            guncel_tsl_res = supabase.table("odev_teslimleri").select("id, ogrenci_id").eq("odev_id", secilen_odev_id).in_("ogrenci_id", ogr_idler).execute()
+                            db_tsl_map = {t["ogrenci_id"]: t["id"] for t in guncel_tsl_res.data} if guncel_tsl_res.data else {}
+                            
                             for index, row in duzenlenmis_df.iterrows():
+                                ogr_id_int = int(row["Öğrenci ID"])
+                                kayit_id = db_tsl_map.get(ogr_id_int, row["Kayıt ID"])
                                 durum = row["Durum"]
                                 not_metni = str(row["Öğretmen Notu"]).strip() if pd.notnull(row["Öğretmen Notu"]) else ""
                                 
                                 if durum != "Değerlendirilmedi":
                                     kayit_verisi = {
                                         "odev_id": secilen_odev_id,
-                                        "ogrenci_id": int(row["Öğrenci ID"]),
+                                        "ogrenci_id": ogr_id_int,
                                         "durum": durum,
                                         "ogretmen_notu": not_metni
                                     }
-                                    if pd.notnull(row["Kayıt ID"]):
-                                        supabase.table("odev_teslimleri").update({"durum": durum, "ogretmen_notu": not_metni}).eq("id", int(row["Kayıt ID"])).execute()
+                                    if pd.notnull(kayit_id):
+                                        supabase.table("odev_teslimleri").update({"durum": durum, "ogretmen_notu": not_metni}).eq("id", int(kayit_id)).execute()
                                     else:
                                         supabase.table("odev_teslimleri").insert(kayit_verisi).execute()
-                                elif pd.notnull(row["Kayıt ID"]) and durum == "Değerlendirilmedi":
-                                    supabase.table("odev_teslimleri").delete().eq("id", int(row["Kayıt ID"])).execute()
+                                elif pd.notnull(kayit_id) and durum == "Değerlendirilmedi":
+                                    supabase.table("odev_teslimleri").delete().eq("id", int(kayit_id)).execute()
                             st.success("✅ Ödev durumları güncellendi.")
+                            st.rerun()
                         except Exception as e:
                             st.error(f"Değerlendirme kaydedilemedi: {str(e)}")
         except Exception as e:
@@ -723,7 +745,7 @@ elif menu == "LGS Takip":
                     islem_tipi = st.radio("İşlem Tipi Seçin:", ["➕ Yeni Deneme Girişi Yap", "✏️ Mevcut Denemeyi Düzenle / Sil"], horizontal=True)
                     
                     if islem_tipi == "➕ Yeni Deneme Girişi Yap":
-                        deneme_adi = st.text_input("Yeni Deneme Sınavı Adı (Örn: Özdebir LGS-1)")
+                        deneme_adi = st.text_input("Yeni Deneme Sınavı Adı (Örn: Özdebir LGS-1)").strip()
                         lgs_tablo_verisi = []
                         for ogr in ogrenciler:
                             lgs_tablo_verisi.append({
@@ -740,7 +762,7 @@ elif menu == "LGS Takip":
                     else:
                         mevcut_denemeler_res = supabase.table("lgs_denemeleri").select("deneme_adi").in_("ogrenci_id", ogr_idler).execute()
                         if mevcut_denemeler_res.data:
-                            benzersiz_denemeler = list(set([d["deneme_adi"] for d in mevcut_denemeler_res.data]))
+                            benzersiz_denemeler = sorted(list(set([d["deneme_adi"] for d in mevcut_denemeler_res.data])))
                             deneme_adi = st.selectbox("Düzenlenecek Deneme Sınavını Seçin", benzersiz_denemeler)
                             
                             col_del1, col_del2 = st.columns([4, 1])
@@ -815,8 +837,13 @@ elif menu == "LGS Takip":
                                 
                                 if not hata_var_mi:
                                     try:
+                                        # Mükerrer kaydı önlemek için bu sınav adına ait mevcut kayıtları kontrol et
+                                        mevcut_kontrol_res = supabase.table("lgs_denemeleri").select("id, ogrenci_id").eq("deneme_adi", deneme_adi).in_("ogrenci_id", ogr_idler).execute()
+                                        db_kayit_map = {d["ogrenci_id"]: d["id"] for d in mevcut_kontrol_res.data} if mevcut_kontrol_res.data else {}
+                                        
                                         for index, row in duzenlenmis_lgs_df.iterrows():
-                                            k_id = row.get("Kayıt ID")
+                                            ogr_id_int = int(row["Öğrenci ID"])
+                                            k_id = db_kayit_map.get(ogr_id_int, row.get("Kayıt ID"))
                                             
                                             if row["Katılım"] == "Girmedi":
                                                 if pd.notnull(k_id):
@@ -824,7 +851,7 @@ elif menu == "LGS Takip":
                                                 continue
                                                 
                                             kayit_paketi = {
-                                                "ogrenci_id": int(row["Öğrenci ID"]), "deneme_adi": deneme_adi,
+                                                "ogrenci_id": ogr_id_int, "deneme_adi": deneme_adi,
                                                 "turkce_d": int(row["Türkçe D"]), "turkce_y": int(row["Türkçe Y"]),
                                                 "mat_d": int(row["Matematik D"]), "mat_y": int(row["Matematik Y"]),
                                                 "fen_d": int(row["Fen D"]), "fen_y": int(row["Fen Y"]),
@@ -847,7 +874,7 @@ elif menu == "LGS Takip":
                 with tab_lgs2:
                     mevcut_denemeler_res = supabase.table("lgs_denemeleri").select("deneme_adi").in_("ogrenci_id", ogr_idler).execute()
                     if mevcut_denemeler_res.data:
-                        benzersiz_denemeler = list(set([d["deneme_adi"] for d in mevcut_denemeler_res.data]))
+                        benzersiz_denemeler = sorted(list(set([d["deneme_adi"] for d in mevcut_denemeler_res.data])))
                         secili_deneme_analiz = st.selectbox("Başarı Sıralaması Gösterilecek Sınavı Seçin", benzersiz_denemeler)
                         
                         s_veri_res = supabase.table("lgs_denemeleri").select("*").eq("deneme_adi", secili_deneme_analiz).in_("ogrenci_id", ogr_idler).execute()
@@ -872,7 +899,10 @@ elif menu == "LGS Takip":
                             df_s["Top Y"] = df_s[["turkce_y", "mat_y", "fen_y", "ink_y", "din_y", "ing_y"]].sum(axis=1)
                             df_s["Top N"] = df_s[["Tür N", "Mat N", "Fen N", "İnk N", "Din N", "İng N"]].sum(axis=1).round(2)
                             
-                            df_s = df_s.sort_values(by="lgs_puani", ascending=False).reset_index(drop=True)
+                            # Her öğrenci için tek kayıt garantisi (Puanı yüksek ve dolu olanı önceliklendirir)
+                            df_s = df_s.sort_values(by=["lgs_puani", "yuzdelik_dilim", "Top N"], ascending=[False, True, False])
+                            df_s = df_s.drop_duplicates(subset=["ogrenci_id"], keep="first").reset_index(drop=True)
+                            
                             df_s.index += 1
                             df_s = df_s.reset_index().rename(columns={"index": "Sınıf Derecesi"})
                             
@@ -966,6 +996,9 @@ elif menu == "LGS Takip":
                         df_lgs["Toplam Y"] = df_lgs[["turkce_y", "mat_y", "fen_y", "ink_y", "din_y", "ing_y"]].sum(axis=1)
                         df_lgs["Toplam Net"] = df_lgs[["Türkçe Net", "Matematik Net", "Fen Net", "Sosyal/İnkılap Net", "Din Net", "İngilizce Net"]].sum(axis=1).round(2)
                         
+                        # Aynı deneme adına ait mükerrer kayıt varsa en geçerli olanı tut
+                        df_lgs = df_lgs.sort_values(by=["lgs_puani", "Toplam D", "id"], ascending=[True, True, True]).drop_duplicates(subset=["deneme_adi"], keep="last").sort_values(by="id").reset_index(drop=True)
+                        
                         son_deneme_verisi = df_lgs.iloc[-1]
                         ortalama_puan = round(df_lgs["lgs_puani"].mean(), 2)
                         en_yuksek_puan = round(df_lgs["lgs_puani"].max(), 2)
@@ -983,7 +1016,7 @@ elif menu == "LGS Takip":
                         en_istikrarsiz_ders = std_sapmalar.idxmax().replace(" Net", "")
                         en_sapma_degeri = std_sapmalar.max()
                         
-                        sub_tab1, sub_tab2 = st.tabs(["📊 Genel Süreç Analiz Raporu", "⚖️️ Gelişmiş Sınav Karşılaştırma (Kafa Kafaya)"])
+                        sub_tab1, sub_tab2 = st.tabs(["📊 Genel Süreç Analiz Raporu", "⚖ Gelişmiş Sınav Karşılaştırma (Kafa Kafaya)"])
                         
                         with sub_tab1:
                             col_m1, col_m2, col_m3, col_m4 = st.columns(4)
@@ -1211,7 +1244,7 @@ elif menu == "LGS Takip":
                                 
                                 col_radar, col_tablo = st.columns([1, 1])
                                 with col_radar:
-                                    st.write(f"**Gruplanmış Çubuk Karşılaştırma Grafiği**")
+                                    st.write("**Gruplanmış Çubuk Karşılaştırma Grafiği**")
                                     labels_ui = ["Mat","Türkçe","Fen","Sosyal/İnkılap","Din","İng"]
                                     vals1 = [d1_veri[d] for d in ders_listesi]
                                     vals2 = [d2_veri[d] for d in ders_listesi]
@@ -1236,7 +1269,7 @@ elif menu == "LGS Takip":
                                     plt.close(fig_bar)
                                     
                                 with col_tablo:
-                                    st.write(f"**Net Değişim Veri Matrisi**")
+                                    st.write("**Net Değişim Veri Matrisi**")
                                     st.dataframe(df_fark.drop(columns=["_f"]), hide_index=True, use_container_width=True)
 
                                 html_karsilastirma = f"""
@@ -1501,7 +1534,7 @@ elif menu == "LGS Takip":
                                 
                                 for g in v_res_edit.data:
                                     o_ad = reverse_ogr_edit.get(g["ogrenci_id"], "Bilinmiyor")
-                                    etiket = f"{o_ad} | {g['tarih']} | {g['veli_bilgisi']}"
+                                    etiket = f"{o_ad} | {g['tarih']} | {g['veli_bilgisi']} (#{g['id']})"
                                     gorusme_secenekleri[etiket] = g
                                 
                                 secilen_etiket = st.selectbox("İşlem Yapılacak Kaydı Seçin", list(gorusme_secenekleri.keys()))
@@ -1683,6 +1716,7 @@ elif menu == "🛠️ Test Verisi Modülü":
                         supabase.table("notlar").delete().in_("ogrenci_id", test_ogr_ids).execute()
                         supabase.table("odev_teslimleri").delete().in_("ogrenci_id", test_ogr_ids).execute()
                         supabase.table("lgs_denemeleri").delete().in_("ogrenci_id", test_ogr_ids).execute()
+                        supabase.table("lgs_veli_gorusmeleri").delete().in_("ogrenci_id", test_ogr_ids).execute()
                         supabase.table("ogrenciler").delete().in_("id", test_ogr_ids).execute()
                     
                     res_test_odev = supabase.table("odevler").select("id").like("odev_adi", "%Test Ödevi%").execute()
